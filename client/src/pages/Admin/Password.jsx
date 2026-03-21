@@ -32,7 +32,7 @@ const Subject = () => {
   const fetchSubjects = async () => {
     try {
       setFetching(true);
-      const res = await axios.get("http://localhost:5000/api/subject");
+      const res = await axios.get("https://computer-excellance-academy.onrender.com/api/subject");
       setSubjects(res?.data?.data || []);
     } catch (error) {
       showToast("Failed to load subjects", "error");
@@ -86,10 +86,10 @@ const Subject = () => {
       setSaving(true);
 
       if (isEditing) {
-        await axios.put(`http://localhost:5000/api/subject/${editingId}`, form);
+        await axios.put(`https://computer-excellance-academy.onrender.com/api/subject/${editingId}`, form);
         showToast("Subject updated successfully");
       } else {
-        await axios.post("http://localhost:5000/api/subject", form);
+        await axios.post("https://computer-excellance-academy.onrender.com/api/subject", form);
         showToast("Subject added successfully");
       }
 
@@ -107,7 +107,7 @@ const Subject = () => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/subject/${id}`);
+      await axios.delete(`https://computer-excellance-academy.onrender.com/api/subject/${id}`);
       showToast("Subject deleted successfully");
       fetchSubjects();
     } catch (error) {

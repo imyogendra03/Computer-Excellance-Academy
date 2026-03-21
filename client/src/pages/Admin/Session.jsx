@@ -45,7 +45,7 @@ const Session = () => {
   const fetchSessions = async () => {
     try {
       setFetching(true);
-      const res = await axios.get("http://localhost:5000/api/session");
+      const res = await axios.get("https://computer-excellance-academy.onrender.com/api/session");
       setSessions(res?.data?.data || []);
     } catch (error) {
       showToast("Failed to load sessions", "error");
@@ -101,10 +101,10 @@ const Session = () => {
       setSaving(true);
 
       if (isEditing) {
-        await axios.put(`http://localhost:5000/api/session/${editingId}`, form);
+        await axios.put(`https://computer-excellance-academy.onrender.com/api/session/${editingId}`, form);
         showToast("Session updated successfully");
       } else {
-        await axios.post("http://localhost:5000/api/session", form);
+        await axios.post("https://computer-excellance-academy.onrender.com/api/session", form);
         showToast("Session added successfully");
       }
 
@@ -122,7 +122,7 @@ const Session = () => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/session/${id}`);
+      await axios.delete(`https://computer-excellance-academy.onrender.com/api/session/${id}`);
       showToast("Session deleted successfully");
       fetchSessions();
     } catch (error) {

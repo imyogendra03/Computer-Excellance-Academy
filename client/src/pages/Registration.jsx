@@ -40,7 +40,7 @@ const Registration = () => {
   });
 
   useEffect(() => {
-    axios.get("http://localhost:5000/api/session")
+    axios.get("https://computer-excellance-academy.onrender.com/api/session")
       .then(r => setSessions(r.data.data))
       .catch(() => setSessions([
         { _id:"jan25", name:"January 2025 Batch" },
@@ -90,7 +90,7 @@ const Registration = () => {
     if (Object.keys(e).length) { setErrors(e); return; }
     setLoading(true);
     try {
-      await axios.post("http://localhost:5000/api/examinee", form);
+      await axios.post("https://computer-excellance-academy.onrender.com/api/examinee", form);
       setDone(true);
       setTimeout(() => { window.location.href = "/"; }, 3000);
     } catch {

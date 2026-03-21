@@ -36,7 +36,7 @@ const Examinee = () => {
   const fetchExaminees = async () => {
     try {
       setFetching(true);
-      const res = await axios.get("http://localhost:5000/api/examinee");
+      const res = await axios.get("https://computer-excellance-academy.onrender.com/api/examinee");
       setExaminees(res?.data?.data || []);
     } catch (error) {
       showToast("Failed to load examinees", "error");
@@ -88,7 +88,7 @@ const Examinee = () => {
 
     try {
       setSaving(true);
-      await axios.put(`http://localhost:5000/api/examinee/${editingId}`, form);
+      await axios.put(`https://computer-excellance-academy.onrender.com/api/examinee/${editingId}`, form);
       showToast("Examinee updated successfully");
       closeModal();
       fetchExaminees();
@@ -104,7 +104,7 @@ const Examinee = () => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/examinee/${id}`);
+      await axios.delete(`https://computer-excellance-academy.onrender.com/api/examinee/${id}`);
       showToast("Examinee deleted successfully");
       fetchExaminees();
     } catch (error) {

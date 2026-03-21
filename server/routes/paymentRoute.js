@@ -139,7 +139,7 @@ router.post("/", async (req, res) => {
             </table>
 
             <div style="margin-top: 24px; text-align: center;">
-              <a href="http://localhost:5173/userdash/my-batches" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 22px; border-radius: 10px;">
+              <a href="https://computer-excellance-academy.vercel.app/UserDash/my-batches" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 22px; border-radius: 10px;">
                 Open My Batches
               </a>
             </div>

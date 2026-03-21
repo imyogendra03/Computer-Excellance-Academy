@@ -6,7 +6,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const sendVerificationEmail = async (toEmail, token) => {
-  const link = `http://localhost:${process.env.PORT}/api/auth/verify-email?token=${token}`;
+  const link = `https://computer-excellance-academy.onrender.com/api/auth/verify-email?token=${token}`;
   await transporter.sendMail({
     from: `"Exam Portal" <${process.env.EMAIL_USER}>`,
     to: toEmail,

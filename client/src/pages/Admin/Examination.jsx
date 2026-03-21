@@ -43,9 +43,9 @@ const Examination = () => {
     try {
       setFetching(true);
       const [subjectRes, sessionRes, examRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/subject"),
-        axios.get("http://localhost:5000/api/session"),
-        axios.get("http://localhost:5000/api/exams/exams"),
+        axios.get("https://computer-excellance-academy.onrender.com/api/subject"),
+        axios.get("https://computer-excellance-academy.onrender.com/api/session"),
+        axios.get("https://computer-excellance-academy.onrender.com/api/exams/exams"),
       ]);
 
       setSubjects(subjectRes?.data?.data || []);
@@ -163,10 +163,10 @@ const Examination = () => {
       setSaving(true);
 
       if (isEditing) {
-        await axios.put(`http://localhost:5000/api/exams/${editingExamId}`, formData);
+        await axios.put(`https://computer-excellance-academy.onrender.com/api/exams/${editingExamId}`, formData);
         showToast("Exam updated successfully");
       } else {
-        await axios.post("http://localhost:5000/api/exams", formData);
+        await axios.post("https://computer-excellance-academy.onrender.com/api/exams", formData);
         showToast("Exam created successfully");
       }
 
@@ -184,7 +184,7 @@ const Examination = () => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/exams/${id}`);
+      await axios.delete(`https://computer-excellance-academy.onrender.com/api/exams/${id}`);
       showToast("Exam deleted successfully");
       fetchData();
     } catch (err) {

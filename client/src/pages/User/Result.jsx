@@ -32,7 +32,7 @@ const Result = () => {
     try {
       setFetching(true);
       const res = await axios.get(
-        `http://localhost:5000/api/exams/examinee-result/${userId}`
+        `https://computer-excellance-academy.onrender.com/api/exams/examinee-result/${userId}`
       );
 
       setResults(

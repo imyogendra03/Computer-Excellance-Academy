@@ -46,7 +46,7 @@ export const Notes = () => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/course");
+        const res = await fetch("https://computer-excellance-academy.onrender.com/api/course");
         const data = await res.json();
         setCourses(data?.data || []);
       } catch {}
@@ -58,7 +58,7 @@ export const Notes = () => {
     const fetchNotes = async () => {
       try {
         setLoading(true);
-        let url = "http://localhost:5000/api/notes/user?";
+        let url = "https://computer-excellance-academy.onrender.com/api/notes/user?";
         if (filterCourse)  url += `courseId=${filterCourse}&`;
         if (filterSubject) url += `subject=${filterSubject}`;
         const res  = await fetch(url);

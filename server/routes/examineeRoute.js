@@ -157,7 +157,7 @@ router.post("/", async (req, res) => {
             </p>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="http://localhost:5173/login" style="background: #007bff; color: #fff; padding: 12px 24px; font-size: 16px; border-radius: 6px; text-decoration: none; display: inline-block;">
+              <a href="https://computer-excellance-academy.vercel.app/login" style="background: #007bff; color: #fff; padding: 12px 24px; font-size: 16px; border-radius: 6px; text-decoration: none; display: inline-block;">
                 Log in to Your Account
               </a>
             </div>

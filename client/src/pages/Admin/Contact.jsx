@@ -25,7 +25,7 @@ const Contact = () => {
   const fetchAll = async () => {
     try {
       setFetching(true);
-      const res = await axios.get("http://localhost:5000/api/message/all");
+      const res = await axios.get("https://computer-excellance-academy.onrender.com/api/message/all");
       setMessages(res?.data?.message || []);
     } catch (err) {
       showToast("Failed to load messages", "error");
@@ -55,7 +55,7 @@ const Contact = () => {
 
     try {
       setSendingId(id);
-      await axios.put(`http://localhost:5000/api/message/reply/${id}`, {
+      await axios.put(`https://computer-excellance-academy.onrender.com/api/message/reply/${id}`, {
         answer,
         role: "admin",
       });
@@ -90,7 +90,7 @@ const Contact = () => {
     try {
       setSendingId(editingMessage._id);
       await axios.put(
-        `http://localhost:5000/api/message/reply/${editingMessage._id}`,
+        `https://computer-excellance-academy.onrender.com/api/message/reply/${editingMessage._id}`,
         {
           answer: editReplyText.trim(),
           role: "admin",
@@ -111,7 +111,7 @@ const Contact = () => {
     if (!confirmed) return;
 
     try {
-      await axios.put(`http://localhost:5000/api/message/delete/${id}`, {
+      await axios.put(`https://computer-excellance-academy.onrender.com/api/message/delete/${id}`, {
         role: "admin",
       });
       showToast("Reply deleted successfully");

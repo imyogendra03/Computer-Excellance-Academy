@@ -39,7 +39,7 @@ router.post("/upload-pdf", (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No PDF file uploaded" });
     }
-    const fileUrl = `http://localhost:5000/uploads/notes/${req.file.filename}`;
+    const fileUrl = `https://computer-excellance-academy.onrender.com/uploads/notes/${req.file.filename}`;
     console.log("PDF uploaded:", fileUrl);
     return res.status(200).json({ success: true, fileUrl });
   });
@@ -124,7 +124,7 @@ router.delete("/:id", async (req, res) => {
     if (!note) return res.status(404).json({ message: "Note not found" });
 
     if (note.fileUrl) {
-      const filePath = note.fileUrl.replace("http://localhost:5000/", "");
+      const filePath = note.fileUrl.replace("https://computer-excellance-academy.onrender.com/", "");
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
 

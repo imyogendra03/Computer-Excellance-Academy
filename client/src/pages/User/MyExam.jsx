@@ -30,7 +30,7 @@ const MyExam = () => {
   const fetchExams = async () => {
     try {
       setFetching(true);
-      const res = await axios.get("http://localhost:5000/api/exams/exams");
+      const res = await axios.get("https://computer-excellance-academy.onrender.com/api/exams/exams");
       setExams(res?.data || []);
     } catch (error) {
       showToast("Failed to load exams", "error");

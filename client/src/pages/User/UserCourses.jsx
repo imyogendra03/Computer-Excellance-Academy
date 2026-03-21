@@ -29,7 +29,7 @@ const UserCourses = () => {
     const fetchCourses = async () => {
       try {
         setFetchingCourses(true);
-        const res = await fetch("http://localhost:5000/api/course");
+        const res = await fetch("https://computer-excellance-academy.onrender.com/api/course");
         const data = await res.json();
         setCourses(Array.isArray(data?.data) ? data.data : []);
       } catch (error) {
@@ -60,7 +60,7 @@ const UserCourses = () => {
       setBatchModalOpen(true);
       setLoadingBatches(true);
       setBatches([]);
-     const res = await fetch(`http://localhost:5000/api/batch/course/${course._id}`);
+     const res = await fetch(`https://computer-excellance-academy.onrender.com/api/batch/course/${course._id}`);
       const data = await res.json();
       setBatches(Array.isArray(data?.data) ? data.data : []);
     } catch (error) {
@@ -81,7 +81,7 @@ const UserCourses = () => {
           : Number(batch.price || 0);
 
       // Step 1 — Order create karo
-      const orderRes = await fetch("http://localhost:5000/api/payment/create-order", {
+      const orderRes = await fetch("https://computer-excellance-academy.onrender.com/api/payment/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: finalAmount, batchId: batch._id }),
@@ -103,7 +103,7 @@ const UserCourses = () => {
         handler: async function (response) {
           try {
             // Step 3 — Verify karo
-            const verifyRes = await fetch("http://localhost:5000/api/payment/verify", {
+            const verifyRes = await fetch("https://computer-excellance-academy.onrender.com/api/payment/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({

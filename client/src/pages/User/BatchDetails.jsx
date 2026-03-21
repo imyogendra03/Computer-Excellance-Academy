@@ -34,7 +34,7 @@ const BatchDetails = () => {
   const fetchBatch = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:5000/api/batch/${id}`);
+      const res = await axios.get(`https://computer-excellance-academy.onrender.com/api/batch/${id}`);
       setBatch(res?.data?.data || null);
     } catch (error) {
       showToast("Failed to load batch details", "error");

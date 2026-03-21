@@ -38,8 +38,8 @@ const AdminHome = () => {
       setLoading(true);
 
       const [dashboardRes, examsRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/dashboard/"),
-        axios.get("http://localhost:5000/api/exams/exams"),
+        axios.get("https://computer-excellance-academy.onrender.com/api/dashboard/"),
+        axios.get("https://computer-excellance-academy.onrender.com/api/exams/exams"),
       ]);
 
       setDashboard(dashboardRes?.data || {});

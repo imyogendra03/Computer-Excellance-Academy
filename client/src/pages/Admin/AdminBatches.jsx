@@ -61,7 +61,7 @@ const AdminBatches = () => {
 
   const fetchCourses = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/course");
+      const res = await axios.get("https://computer-excellance-academy.onrender.com/api/course");
       setCourses(res?.data?.data || []);
     } catch (error) {
       showToast("Failed to load courses", "error");
@@ -71,7 +71,7 @@ const AdminBatches = () => {
   const fetchBatches = async () => {
     try {
       setFetching(true);
-      const res = await axios.get("http://localhost:5000/api/batch");
+      const res = await axios.get("https://computer-excellance-academy.onrender.com/api/batch");
       setBatches(res?.data?.data || []);
     } catch (error) {
       showToast("Failed to load batches", "error");
@@ -152,10 +152,10 @@ const AdminBatches = () => {
       delete payload.featuresText;
 
       if (isEditing) {
-        await axios.put(`http://localhost:5000/api/batch/${editingId}`, payload);
+        await axios.put(`https://computer-excellance-academy.onrender.com/api/batch/${editingId}`, payload);
         showToast("Batch updated successfully");
       } else {
-        await axios.post("http://localhost:5000/api/batch", payload);
+        await axios.post("https://computer-excellance-academy.onrender.com/api/batch", payload);
         showToast("Batch added successfully");
       }
 
@@ -176,7 +176,7 @@ const AdminBatches = () => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/batch/${id}`);
+      await axios.delete(`https://computer-excellance-academy.onrender.com/api/batch/${id}`);
       showToast("Batch deleted successfully");
       fetchBatches();
     } catch (error) {

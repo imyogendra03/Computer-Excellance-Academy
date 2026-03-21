@@ -16,7 +16,7 @@ const UserPayments = () => {
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:5000/api/payment/user/${userId}`);
+      const res = await axios.get(`https://computer-excellance-academy.onrender.com/api/payment/user/${userId}`);
       setPayments(res.data?.data || []);
     } catch {
       showToast("Payments load nahi ho paaye", "error");
