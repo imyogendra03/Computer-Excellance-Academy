@@ -10,16 +10,14 @@ app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 
-const url = "mongodb://localhost:27017/examprep";
-
+// Atlas MongoDB
 mongoose
-  .connect(url)
-  .then(() => {
-    console.log("Successfully Connected");
-  })
-  .catch((er) => {
-    console.log(`Error is ${er}`);
-  });
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("Successfully Connected"))
+  .catch((er) => console.log(`Error is ${er}`));
+
+// Auth routes
+app.use("/api/auth", require("./routes/auth"));
 
 // Existing APIs
 app.use("/api/notes", require("./routes/noteRoute"));
@@ -32,10 +30,10 @@ app.use("/api/exams", require("./routes/examinationRoute"));
 app.use("/api/message", require("./routes/messageRoute"));
 app.use("/api/dashboard", require("./routes/dashboardRoute"));
 
-// Future-ready APIs for course and batch module
- app.use("/api/course", require("./routes/courseRoute"));
- app.use("/api/batch", require("./routes/batchRoute"));
- app.use("/api/payment", require("./routes/paymentRoute"));
+// Course, Batch, Payment
+app.use("/api/course", require("./routes/courseRoute"));
+app.use("/api/batch", require("./routes/batchRoute"));
+app.use("/api/payment", require("./routes/paymentRoute"));
 
 app.get("/", (req, res) => {
   return res.json({
@@ -44,6 +42,6 @@ app.get("/", (req, res) => {
   });
 });
 
-app.listen(5000, () => {
+app.listen(process.env.PORT || 5000, () => {
   console.log("Server Connected on http://localhost:5000");
 });

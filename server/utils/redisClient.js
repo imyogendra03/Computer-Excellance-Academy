@@ -1,13 +1,7 @@
-const Redis = require("ioredis");
+const mockRedis = {
+  get: async () => null,
+  set: async () => null,
+  del: async () => null,
+};
 
-const redis = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  retryStrategy: (times) => Math.min(times * 50, 2000), // auto-reconnect
-});
-
-redis.on("connect", () => console.log("✅ Redis connected"));
-redis.on("error", (err) => console.error("❌ Redis error:", err));
-
-module.exports = redis;
+module.exports = mockRedis;
