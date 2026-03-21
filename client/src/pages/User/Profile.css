@@ -1,0 +1,19 @@
+.profile-card {
+  border-radius: 10px;
+}
+
+.profile-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-section {
+  border-radius: 10px;
+}
+
+.form-control:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+}
