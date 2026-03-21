@@ -39,6 +39,7 @@ import Course from "./pages/Course";
 import UserCourses from "./pages/User/UserCourses";
 import UserNotes from "./pages/User/UserNotes";
 
+
 function App() {
   return (
     <Router>
@@ -72,7 +73,7 @@ function App() {
         </Route>
 
         {/* User Dashboard Routes */}
-        <Route path="/userdash" element={<UserDash />}>
+        <Route path="/UserDash" element={<UserDash />}>
         <Route path="payments" element={<UserPayments />} />
           <Route index element={<UserHome />} />
           <Route path="courses" element={<UserCourses />} />
