@@ -35,6 +35,16 @@ app.use("/api/course", require("./routes/courseRoute"));
 app.use("/api/batch", require("./routes/batchRoute"));
 app.use("/api/payment", require("./routes/paymentRoute"));
 
+app.get("/api/test-db", async (req, res) => {
+  try {
+    const Admin = require("./models/Admin");
+    const count = await Admin.countDocuments();
+    return res.json({ success: true, count, message: "DB is connected and working" });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.get("/", (req, res) => {
   return res.json({
     success: true,
