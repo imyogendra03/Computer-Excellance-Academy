@@ -3,7 +3,14 @@ const express = require("express");
 const mongoose = require("mongoose");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
+// Helper: generate token
+const generateToken = (payload) => {
+  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, {
+    expiresIn: process.env.JWT_ACCESS_EXPIRY || "15m",
+  });
+};
 // Register admin
 router.post("/", async (req, res) => {
   try {
@@ -52,8 +59,11 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Username or password Incorrect" });
     }
 
+    const token = generateToken({ id: admin._id, email: admin.email, role: "admin" });
+
     return res.json({
       message: "Login Successfully",
+      token,
       admin: {
         role: "admin",
         id: admin._id,
