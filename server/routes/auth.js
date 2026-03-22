@@ -38,16 +38,16 @@ router.post("/register", async (req, res) => {
       return res.status(409).json({ message: "Email pehle se registered hai." });
 
     const hashed = await bcrypt.hash(password, 10);
-    const verifyToken = crypto.randomBytes(32).toString("hex");
+    // const verifyToken = crypto.randomBytes(32).toString("hex");
 
     const examinee = await Examinee.create({
-      name, email, password: hashed, emailVerifyToken: verifyToken,
+      name, email, password: hashed, // emailVerifyToken: verifyToken,
     });
 
-    await sendVerificationEmail(email, verifyToken);
+    // await sendVerificationEmail(email, verifyToken);
 
     return res.status(201).json({
-      message: "Registered! Email verify karo (inbox check karo).",
+      message: "Registered successfully!",
     });
   } catch (err) {
     console.error("register error:", err);
