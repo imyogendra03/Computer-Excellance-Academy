@@ -1,9 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const Course = require("../models/Course");
+const authMiddleware = require("../middlewares/authMiddleware");
+const adminMiddleware = require("../middlewares/adminMiddleware");
+const { readThroughCache, invalidateNamespace } = require("../utils/responseCache");
 
-// Create course
-router.post("/", async (req, res) => {
+router.post("/", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const {
       title,
@@ -47,6 +49,7 @@ router.post("/", async (req, res) => {
     });
 
     await course.save();
+    await invalidateNamespace("courses");
 
     return res.status(201).json({
       success: true,
@@ -59,7 +62,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Get all courses
 router.get("/", async (req, res) => {
   try {
     const { published } = req.query;
@@ -71,7 +73,13 @@ router.get("/", async (req, res) => {
       filter.status = "active";
     }
 
-    const courses = await Course.find(filter).sort({ createdAt: -1 });
+    const cacheSuffix = `list:${published === "true" ? "published" : "all"}`;
+    const courses = await readThroughCache("courses", cacheSuffix, 120, async () =>
+      Course.find(filter)
+        .select("title slug shortDescription fullDescription category level duration lessons students thumbnail icon highlightTag isPublished status createdAt")
+        .sort({ createdAt: -1 })
+        .lean()
+    );
 
     return res.json({
       success: true,
@@ -83,10 +91,13 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get course by slug
 router.get("/slug/:slug", async (req, res) => {
   try {
-    const course = await Course.findOne({ slug: req.params.slug.toLowerCase() });
+    const slug = req.params.slug.toLowerCase();
+    const course = await readThroughCache("courses", `slug:${slug}`, 300, async () =>
+      Course.findOne({ slug })
+        .lean()
+    );
 
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
@@ -102,10 +113,11 @@ router.get("/slug/:slug", async (req, res) => {
   }
 });
 
-// Get course by id
 router.get("/:id", async (req, res) => {
   try {
-    const course = await Course.findById(req.params.id);
+    const course = await readThroughCache("courses", `id:${req.params.id}`, 300, async () =>
+      Course.findById(req.params.id).lean()
+    );
 
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
@@ -121,8 +133,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Update course
-router.put("/:id", async (req, res) => {
+router.put("/:id", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const {
       title,
@@ -175,6 +186,8 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    await invalidateNamespace("courses");
+
     return res.json({
       success: true,
       message: "Course updated successfully",
@@ -186,8 +199,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Update course publish status
-router.patch("/:id/publish", async (req, res) => {
+router.patch("/:id/publish", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { isPublished } = req.body;
 
@@ -201,6 +213,8 @@ router.patch("/:id/publish", async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    await invalidateNamespace("courses");
+
     return res.json({
       success: true,
       message: "Course publish status updated",
@@ -212,14 +226,15 @@ router.patch("/:id/publish", async (req, res) => {
   }
 });
 
-// Delete course
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const deletedCourse = await Course.findByIdAndDelete(req.params.id);
 
     if (!deletedCourse) {
       return res.status(404).json({ message: "Course not found" });
     }
+
+    await invalidateNamespace("courses");
 
     return res.json({
       success: true,

@@ -1,24 +1,45 @@
-const Examinee = require("../models/Examinee");
 const express = require("express");
-const router = express.Router();
-const sendEmail = require("../utils/sendMail");
 const multer = require("multer");
 const path = require("path");
+const bcrypt = require("bcryptjs");
+const Examinee = require("../models/Examinee");
+const Batch = require("../models/Batch");
+const authMiddleware = require("../middlewares/authMiddleware");
+const adminMiddleware = require("../middlewares/adminMiddleware");
+const {
+  buildPurchasedBatchEntry,
+  getBatchExpiryDate,
+  syncPurchasedBatches,
+} = require("../utils/batchAccess");
 
-// Storage config
+const router = express.Router();
+
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/");
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
 
-const upload = multer({ storage });
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype === "image/jpeg" || file.mimetype === "image/jpg") {
+    cb(null, true);
+  } else {
+    cb(new Error("Only JPG and JPEG formats are allowed!"), false);
+  }
+};
 
-// Update profile with file upload
-router.put("/:id", upload.single("profileImage"), async (req, res) => {
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 50 * 1024 }, // 50KB Max
+  fileFilter: fileFilter
+});
+
+const populateExamineeAccess = (query) =>
+  query
+    .populate("purchasedBatches.batch")
+    .populate("purchasedBatches.course")
+    .populate("purchasedBatches.paymentId");
+
+router.put("/:id", authMiddleware, upload.single("profileImage"), async (req, res) => {
   try {
     const {
       name,
@@ -32,62 +53,37 @@ router.put("/:id", upload.single("profileImage"), async (req, res) => {
       session,
     } = req.body;
 
-    const updateData = {
-      name,
-      email,
-      number,
-      address,
-      password,
-      college,
-      qualification,
-      status,
-      session,
-    };
-
+    const updateData = { name, email, number, address, password, college, qualification, status, session };
     if (req.file) {
       updateData.profileImage = req.file.filename;
     }
 
-    const updatedExaminee = await Examinee.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    );
-
+    const updatedExaminee = await Examinee.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!updatedExaminee) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Examinee not found" });
+      return res.status(404).json({ success: false, message: "Examinee not found" });
     }
 
-    return res.json({
-      success: true,
-      message: "Profile updated successfully",
-      data: updatedExaminee,
-    });
+    return res.json({ success: true, message: "Profile updated successfully", data: updatedExaminee });
   } catch (err) {
     console.error("Profile update error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// Get purchased batches for logged-in user
-router.get("/:id/my-batches", async (req, res) => {
+router.get("/:id/my-batches", authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const examinee = await Examinee.findById(id)
-      .populate("purchasedBatches.batch")
-      .populate("purchasedBatches.course")
-      .populate("purchasedBatches.paymentId");
-
+    const examinee = await populateExamineeAccess(Examinee.findById(req.params.id));
     if (!examinee) {
       return res.status(404).json({ message: "Examinee not found" });
     }
 
+    await syncPurchasedBatches(examinee);
+
     return res.json({
       success: true,
-      data: examinee.purchasedBatches || [],
+      data: (examinee.purchasedBatches || []).sort(
+        (a, b) => new Date(b.enrolledAt).getTime() - new Date(a.enrolledAt).getTime()
+      ),
     });
   } catch (error) {
     console.error("My batches error:", error);
@@ -95,16 +91,12 @@ router.get("/:id/my-batches", async (req, res) => {
   }
 });
 
-// Get examinee by id
-router.get("/:id", async (req, res) => {
+router.get("/:id", authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
-    const examinee = await Examinee.findById(id);
-
+    const examinee = await Examinee.findById(req.params.id);
     if (!examinee) {
       return res.status(404).json({ message: "Examinee not found" });
     }
-
     return res.json({ data: examinee });
   } catch (error) {
     console.error("Fetch examinee error:", error);
@@ -112,102 +104,106 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Get all examinees
-router.get("/", async (req, res) => {
+router.get("/", authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const examinee = await Examinee.find();
-    return res.json({ data: examinee });
+    const examinees = await populateExamineeAccess(Examinee.find()).sort({ createdAt: -1 });
+    for (const examinee of examinees) {
+      await syncPurchasedBatches(examinee);
+    }
+    return res.json({ data: examinees });
   } catch (error) {
     console.error("Fetch all examinees error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-// Register examinee
-router.post("/register", async (req, res) => {
+router.post("/:id/batch-access", authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { email, name } = req.body;
-
-    const existingExaminee = await Examinee.findOne({ email });
-    if (existingExaminee) {
-      return res
-        .status(400)
-        .json({ message: "Examinee with this email already exists" });
+    const { batchId, replaceBatchId, grantType = "free", accessStatus = "active" } = req.body || {};
+    if (!batchId) {
+      return res.status(400).json({ success: false, message: "batchId is required." });
     }
 
-    const examinee = new Examinee(req.body);
-    await examinee.save();
+    const [user, batch] = await Promise.all([
+      populateExamineeAccess(Examinee.findById(req.params.id)),
+      Batch.findById(batchId).populate("course"),
+    ]);
 
-    const html = `
-      <div style="font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #e3f2fd, #ffffff); padding: 40px;">
-        <div style="max-width: 650px; margin: auto; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden;">
-          <div style="background: linear-gradient(90deg, #007bff, #00c6ff); padding: 25px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Welcome to Softpro!</h1>
-          </div>
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Student not found." });
+    }
+    if (!batch) {
+      return res.status(404).json({ success: false, message: "Batch not found." });
+    }
 
-          <div style="padding: 30px;">
-            <p style="font-size: 18px; color: #333;"><strong>Dear ${name},</strong></p>
+    if (replaceBatchId) {
+      user.purchasedBatches = (user.purchasedBatches || []).filter(
+        (item) => String(item.batch?._id || item.batch) !== String(replaceBatchId)
+      );
+    }
 
-            <p style="font-size: 16px; color: #555; line-height: 1.6;">
-              We're excited to welcome you to the Softpro Exam Prep. Your registration was successful, and your account is now active.
-            </p>
+    const existingIndex = (user.purchasedBatches || []).findIndex(
+      (item) => String(item.batch?._id || item.batch) === String(batchId)
+    );
 
-            <p style="font-size: 16px; color: #555; line-height: 1.6;">
-              You can now log in to access your dashboard, take exams, track your progress, and explore learning resources.
-            </p>
+    const entry = buildPurchasedBatchEntry({
+      batch,
+      paymentId: null,
+      accessType: grantType === "free" ? "free" : "paid",
+      assignedByAdmin: true,
+    });
+    entry.accessStatus = accessStatus;
+    entry.accessExpiresAt = getBatchExpiryDate(batch, entry.accessStartsAt);
 
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="https://computer-excellance-academy.vercel.app/login" style="background: #007bff; color: #fff; padding: 12px 24px; font-size: 16px; border-radius: 6px; text-decoration: none; display: inline-block;">
-                Log in to Your Account
-              </a>
-            </div>
+    if (existingIndex >= 0) {
+      user.purchasedBatches[existingIndex] = {
+        ...user.purchasedBatches[existingIndex].toObject?.(),
+        ...entry,
+      };
+    } else {
+      user.purchasedBatches.push(entry);
+    }
 
-            <p style="font-size: 16px; color: #555;">
-              If you have any questions or face issues logging in, feel free to contact our support team.
-            </p>
+    await user.save();
+    const refreshedUser = await populateExamineeAccess(Examinee.findById(user._id));
+    await syncPurchasedBatches(refreshedUser);
 
-            <p style="margin-top: 30px; font-size: 16px; color: #333;">
-              Best regards,<br>
-              <strong>Team Softpro</strong>
-            </p>
-          </div>
-
-          <div style="background-color: #f1f1f1; text-align: center; padding: 20px; font-size: 12px; color: #777;">
-            This is an automated message. Please do not reply to this email.
-          </div>
-        </div>
-      </div>
-    `;
-
-    setTimeout(async () => {
-      try {
-        await sendEmail(email, "Welcome to the exam portal", html);
-      } catch (mailError) {
-        console.error("Welcome email error:", mailError);
-      }
-    }, 100);
-
-    return res.status(201).json({
+    return res.json({
       success: true,
-      message: "Examinee registered successfully",
-      data: examinee,
+      message: grantType === "free" ? "Free batch assigned successfully." : "Batch access updated successfully.",
+      data: refreshedUser.purchasedBatches,
     });
   } catch (error) {
-    console.error("Registration error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Assign batch access error:", error);
+    return res.status(500).json({ success: false, message: "Failed to update batch access." });
   }
 });
 
-// Delete examinee
-router.delete("/:id", async (req, res) => {
+router.delete("/:id/batch-access/:batchId", authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
-    const examinee = await Examinee.findByIdAndDelete(id);
+    const user = await Examinee.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Student not found." });
+    }
 
+    user.purchasedBatches = (user.purchasedBatches || []).filter(
+      (item) => String(item.batch) !== String(req.params.batchId)
+    );
+    await user.save();
+
+    return res.json({ success: true, message: "Batch access removed successfully." });
+  } catch (error) {
+    console.error("Remove batch access error:", error);
+    return res.status(500).json({ success: false, message: "Failed to remove batch access." });
+  }
+});
+
+router.delete("/:id", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const examinee = await Examinee.findByIdAndDelete(req.params.id);
     if (!examinee) {
       return res.status(404).json({ message: "Examinee not found" });
     }
-
     return res.json({ message: "Deleted successfully" });
   } catch (error) {
     console.error("Delete examinee error:", error);
@@ -215,72 +211,48 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Login
-router.post("/login", async (req, res) => {
+router.put("/change/:id", authMiddleware, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { op, np, cnp } = req.body;
+    if (!op || !np || !cnp) {
+      return res.status(400).json({ success: false, message: "All password fields are required." });
+    }
+    if (np !== cnp) {
+      return res.status(400).json({ success: false, message: "New password and confirm password do not match." });
+    }
+    if (np.length < 8) {
+      return res.status(400).json({ success: false, message: "New password must be at least 8 characters." });
+    }
 
-    const examinee = await Examinee.findOne({ email });
+    const examinee = await Examinee.findById(req.params.id);
     if (!examinee) {
-      return res.status(404).json({ message: "Your Email Incorrect" });
+      return res.status(404).json({ success: false, message: "User not found." });
     }
 
-    if (examinee.password !== password) {
-      return res.status(400).json({ message: "Password is incorrect" });
+    const isMatch = await bcrypt.compare(op, examinee.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Old password is incorrect." });
     }
 
-    examinee.lastLoginAt = new Date();
-    await examinee.save();
-
-    return res.json({
-      message: "Login Successfully",
-      user: {
-        email: examinee.email,
-        role: "user",
-        id: examinee._id,
-        name: examinee.name,
-        purchasedBatches: examinee.purchasedBatches || [],
-      },
-    });
+    const hashed = await bcrypt.hash(np, 12);
+    await Examinee.findByIdAndUpdate(req.params.id, { password: hashed });
+    return res.json({ success: true, message: "Password changed successfully." });
   } catch (error) {
-    console.error("Examinee login error:", error);
-    return res.status(500).json({ message: "Server error during login" });
+    return res.status(500).json({ success: false, message: "Server error while changing password." });
   }
 });
 
-// Change password
-router.put("/change/:id", async (req, res) => {
+router.get("/batch/:batchId", authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { op, np, cnp } = req.body;
+    const students = await Examinee.find({
+      "purchasedBatches.batch": req.params.batchId,
+      status: "active",
+    }).select("name email number purchasedBatches");
 
-    const examinee = await Examinee.findById(req.params.id);
-
-    if (!examinee) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (examinee.password !== op) {
-      return res.json({ message: "Old password is incorrect" });
-    }
-
-    if (np !== cnp) {
-      return res.json({
-        message: "New password and confirm password do not match",
-      });
-    }
-
-    await Examinee.findByIdAndUpdate(
-      req.params.id,
-      { password: np },
-      { new: true }
-    );
-
-    return res.json({ success: true, message: "Password changed successfully" });
+    return res.json({ success: true, data: students });
   } catch (error) {
-    console.error("Error updating password:", error);
-    return res.status(500).json({
-      message: "Server error while changing password",
-    });
+    console.error("Fetch students by batch error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 

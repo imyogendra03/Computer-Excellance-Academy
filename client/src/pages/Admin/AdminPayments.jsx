@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { FiSearch } from "react-icons/fi";
+import { SkeletonTable, SkeletonStats } from "../../components/ui/SkeletonLoader";
+import AppToast from "../../components/ui/AppToast";
+import "../../components/ui/app-ui.css";
 
 const AdminPayments = () => {
   const [payments, setPayments] = useState([]);
@@ -17,7 +21,10 @@ const AdminPayments = () => {
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/payment`);
+      const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/payment`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setPayments(res.data?.data || []);
     } catch {
       showToast("Payments load nahi ho paaye", "error");
@@ -35,8 +42,9 @@ const AdminPayments = () => {
     const email = p.user?.email?.toLowerCase() || "";
     const txn = p.transactionId?.toLowerCase() || "";
     const receipt = p.receiptNumber?.toLowerCase() || "";
+    const stage = p.purchaseStage?.toLowerCase() || "";
     const keyword = search.toLowerCase();
-    const matchSearch = name.includes(keyword) || email.includes(keyword) || txn.includes(keyword) || receipt.includes(keyword);
+    const matchSearch = name.includes(keyword) || email.includes(keyword) || txn.includes(keyword) || receipt.includes(keyword) || stage.includes(keyword);
     const matchStatus = filterStatus ? p.paymentStatus === filterStatus : true;
     const matchMethod = filterMethod ? p.paymentMethod === filterMethod : true;
     return matchSearch && matchStatus && matchMethod;
@@ -56,97 +64,82 @@ const AdminPayments = () => {
   };
 
   return (
-    <>
-      <style>{`
-        .ap-page { min-height: 100vh; background: linear-gradient(180deg,#f8fbff,#eef4ff); }
-        .ap-hero { padding: 32px; border-radius: 28px; color: #fff; background: linear-gradient(135deg,#0f172a,#1d4ed8,#4f46e5); box-shadow: 0 20px 45px rgba(37,99,235,0.22); margin-bottom: 24px; }
-        .ap-panel { background: #fff; border-radius: 24px; box-shadow: 0 16px 40px rgba(15,23,42,0.08); padding: 24px; }
-        .ap-stat { background: #fff; border-radius: 20px; padding: 20px 24px; box-shadow: 0 10px 30px rgba(15,23,42,0.08); }
-        .ap-input { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; font-size: 0.9rem; }
-        .ap-input:focus { border-color: #2563eb; }
-        .ap-select { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; font-size: 0.9rem; background: #fff; }
-        .ap-select:focus { border-color: #2563eb; }
-        .ap-badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-        .ap-toast { position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 280px; color: #fff; padding: 14px 16px; border-radius: 16px; box-shadow: 0 12px 30px rgba(0,0,0,0.18); }
-        .ap-toast.success { background: linear-gradient(135deg,#2563eb,#4f46e5); }
-        .ap-toast.error { background: linear-gradient(135deg,#dc2626,#ef4444); }
-        .ap-table th { color: #475569; font-weight: 600; font-size: 0.85rem; padding: 12px 10px; border-bottom: 2px solid #e2e8f0; }
-        .ap-table td { padding: 14px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; vertical-align: middle; }
-        .ap-table tr:last-child td { border-bottom: 0; }
-        .ap-table tr:hover td { background: #f8fbff; }
-      `}</style>
-
-      {toast.show && <div className={`ap-toast ${toast.type}`}>{toast.message}</div>}
-
-      <div className="ap-page">
-        <div className="container py-4">
-
-          {/* Hero */}
-          <div className="ap-hero">
-            <div className="row align-items-center g-4">
-              <div className="col-lg-8">
-                <h2 className="fw-bold mb-2">Payment History</h2>
-                <p className="mb-0" style={{ opacity: 0.88 }}>
-                  Sabhi students ke payments, receipts aur transactions yahan dekhein.
-                </p>
-              </div>
-              <div className="col-lg-4 text-lg-end">
-                <div style={{ background: "rgba(255,255,255,0.14)", borderRadius: 18, padding: "16px 20px", display: "inline-block" }}>
-                  <div style={{ fontSize: 13, opacity: 0.8 }}>Total Revenue</div>
-                  <div className="fw-bold" style={{ fontSize: 26 }}>₹{totalAmount.toLocaleString()}</div>
-                </div>
+    <div className="app-page">
+      <AppToast
+        toast={toast}
+        onClose={() => setToast({ show: false, message: "", type: "success" })}
+      />
+      <div className="container">
+        <div className="app-hero mb-4">
+          <div className="row align-items-center g-4">
+            <div className="col-lg-8">
+              <h2 className="fw-bold mb-2">Payment History</h2>
+              <p className="mb-0" style={{ opacity: 0.88 }}>
+                All student payments, receipts, and transactions.
+              </p>
+            </div>
+            <div className="col-lg-4 text-lg-end">
+              <div style={{ background: "rgba(0,0,0,0.05)", borderRadius: 16, padding: "12px 20px", display: "inline-block" }}>
+                <div style={{ fontSize: 12, opacity: 0.7 }}>Total Revenue</div>
+                <div className="fw-bold" style={{ fontSize: 24 }}>₹{totalAmount.toLocaleString()}</div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Stats */}
+        {loading ? (
+          <SkeletonStats count={4} />
+        ) : (
           <div className="row g-4 mb-4">
             <div className="col-md-3">
-              <div className="ap-stat">
-                <div className="text-muted small mb-1">Total Payments</div>
+              <div className="app-stat-card">
+                <div className="app-label-muted">Total Payments</div>
                 <h4 className="fw-bold mb-0">{payments.length}</h4>
               </div>
             </div>
             <div className="col-md-3">
-              <div className="ap-stat">
-                <div className="text-muted small mb-1">Successful</div>
+              <div className="app-stat-card">
+                <div className="app-label-muted">Successful</div>
                 <h4 className="fw-bold mb-0" style={{ color: "#16a34a" }}>
                   {payments.filter(p => p.paymentStatus === "success").length}
                 </h4>
               </div>
             </div>
             <div className="col-md-3">
-              <div className="ap-stat">
-                <div className="text-muted small mb-1">Pending</div>
+              <div className="app-stat-card">
+                <div className="app-label-muted">Pending</div>
                 <h4 className="fw-bold mb-0" style={{ color: "#d97706" }}>
                   {payments.filter(p => p.paymentStatus === "pending").length}
                 </h4>
               </div>
             </div>
             <div className="col-md-3">
-              <div className="ap-stat">
-                <div className="text-muted small mb-1">Failed</div>
+              <div className="app-stat-card">
+                <div className="app-label-muted">Failed</div>
                 <h4 className="fw-bold mb-0" style={{ color: "#dc2626" }}>
                   {payments.filter(p => p.paymentStatus === "failed").length}
                 </h4>
               </div>
             </div>
           </div>
+        )}
 
-          {/* Table */}
-          <div className="ap-panel">
-            {/* Filters */}
+        <div className="app-panel">
+          <div className="card-body p-4">
             <div className="row g-3 mb-4">
               <div className="col-md-5">
-                <input
-                  className="ap-input"
-                  placeholder="Search by name, email, transaction ID..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+                <div className="app-search">
+                  <FiSearch className="app-search__icon" />
+                  <input
+                    className="form-control app-input"
+                    placeholder="Search by name, email, transaction ID..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="col-md-3">
-                <select className="ap-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                <select className="form-select app-input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                   <option value="">All Status</option>
                   <option value="success">Success</option>
                   <option value="pending">Pending</option>
@@ -154,28 +147,30 @@ const AdminPayments = () => {
                 </select>
               </div>
               <div className="col-md-3">
-                <select className="ap-select" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}>
+                <select className="form-select app-input" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}>
                   <option value="">All Methods</option>
                   <option value="razorpay">Razorpay</option>
                   <option value="manual">Manual</option>
+                  <option value="free">Free</option>
                 </select>
               </div>
               <div className="col-md-1 d-flex align-items-center">
-                <span className="text-muted small">{filtered.length} records</span>
+                <span className="text-muted small">{filtered.length}</span>
               </div>
             </div>
 
-            {/* Table */}
-            <div className="table-responsive">
-              <table className="table ap-table mb-0">
+            <div className="d-none d-md-block table-responsive">
+              <table className="table align-middle">
                 <thead>
-                  <tr>
+                  <tr style={{ color: "#475569" }}>
                     <th>#</th>
                     <th>Student</th>
                     <th>Course</th>
                     <th>Batch</th>
                     <th>Amount</th>
                     <th>Method</th>
+                    <th>Stage</th>
+                    <th>Access</th>
                     <th>Status</th>
                     <th>Receipt</th>
                     <th>Date</th>
@@ -183,9 +178,13 @@ const AdminPayments = () => {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan="9" className="text-center py-5 text-muted">Loading payments...</td></tr>
+                    <tr>
+                      <td colSpan="11" className="p-0 border-0">
+                        <SkeletonTable rows={8} cols={11} />
+                      </td>
+                    </tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan="9" className="text-center py-5 text-muted">Koi payment record nahi mila.</td></tr>
+                    <tr><td colSpan="11" className="text-center py-5 text-muted">No payment records found.</td></tr>
                   ) : (
                     filtered.map((p, i) => (
                       <tr key={p._id}>
@@ -198,13 +197,23 @@ const AdminPayments = () => {
                         <td>{p.batch?.batchName || "-"}</td>
                         <td className="fw-bold">₹{p.amount?.toLocaleString() || 0}</td>
                         <td>
-                          <span className="ap-badge" style={{ background: p.paymentMethod === "razorpay" ? "#dbeafe" : "#f3f4f6", color: p.paymentMethod === "razorpay" ? "#1d4ed8" : "#374151" }}>
+                          <span className="app-badge" style={{ background: p.paymentMethod === "razorpay" ? "#dbeafe" : "#f3f4f6", color: p.paymentMethod === "razorpay" ? "#1d4ed8" : "#374151" }}>
                             {p.paymentMethod || "manual"}
                           </span>
                         </td>
                         <td>
+                          <span className="app-badge" style={{ background: "#eef2ff", color: "#5b5bd6" }}>
+                            {(p.purchaseStage || "payment_successful").replaceAll("_", " ")}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="app-badge" style={{ background: p.accessType === "free" ? "#dcfce7" : "#eff6ff", color: p.accessType === "free" ? "#16a34a" : "#1d4ed8" }}>
+                            {(p.accessType || "paid").toUpperCase()} / {(p.accessStatus || "active").toUpperCase()}
+                          </span>
+                        </td>
+                        <td>
                           <span
-                            className="ap-badge"
+                            className="app-badge"
                             style={{
                               background: statusColor[p.paymentStatus]?.bg || "#f3f4f6",
                               color: statusColor[p.paymentStatus]?.color || "#374151"
@@ -222,11 +231,31 @@ const AdminPayments = () => {
               </table>
             </div>
 
-            {/* Total Row */}
+            <div className="d-block d-md-none">
+              {loading ? (
+                <div className="text-center py-4">Loading payments...</div>
+              ) : filtered.length === 0 ? (
+                <div className="text-center py-4 text-muted">No records found.</div>
+              ) : (
+                <div className="row g-3">
+                  {filtered.map((p, i) => (
+                    <div className="col-12" key={p._id}>
+                      <div className="app-mobile-card">
+                        <strong>#{i + 1} - {p.user?.name || "-"}</strong>
+                        <div className="text-muted small mt-1">₹{p.amount?.toLocaleString()}</div>
+                        <div className="text-muted small">Status: {p.paymentStatus}</div>
+                        <div className="text-muted small">{formatDate(p.paidAt)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {filtered.length > 0 && (
               <div className="d-flex justify-content-between align-items-center mt-3 pt-3" style={{ borderTop: "2px solid #e2e8f0" }}>
-                <span className="text-muted fw-semibold">{filtered.length} payments shown</span>
-                <span className="fw-bold" style={{ fontSize: "1.1rem" }}>
+                <span className="text-muted fw-semibold">{filtered.length} payments</span>
+                <span className="fw-bold">
                   Total: ₹{filtered.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}
                 </span>
               </div>
@@ -234,7 +263,7 @@ const AdminPayments = () => {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

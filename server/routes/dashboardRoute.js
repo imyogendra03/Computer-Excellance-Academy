@@ -6,9 +6,11 @@ const Exam = require('../models/Examination');
 const Subject = require('../models/Subject');
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require("../middlewares/authMiddleware");
+const adminMiddleware = require("../middlewares/adminMiddleware");
 const ExamAttempted = require('../models/ExamAttempted');
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const totalExaminees = await Examinee.countDocuments();
         const totalQuestions = await Question.countDocuments();
@@ -28,7 +30,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-router.get('/exams/:id', async (req, res) => {
+router.get('/exams/:id', authMiddleware, async (req, res) => {
     try {
         const examineeId = req.params.id;
         const exam = await Examination.countDocuments({ examineeId: examineeId });
@@ -42,8 +44,7 @@ router.get('/exams/:id', async (req, res) => {
     }
 });
 
-// status for the examinee router
-router.get('/examinee-result/:id', async (req, res) => {
+router.get('/examinee-result/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
   try {
     const examination = await ExamAttempted.countDocuments({

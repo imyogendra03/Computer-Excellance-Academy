@@ -1,9 +1,18 @@
 {
-    "name": "computer-excellance-academy",
+    "name": "computer-excellence-academy",
     "version": "1.0.0",
+    "description": "Computer Excellence Academy - Free Digital Education Platform",
+    "engines": {
+        "node": ">=18.0.0",
+        "npm": ">=9.0.0"
+    },
     "scripts": {
+        "install-all": "npm install && npm install --prefix client && npm install --prefix server",
         "install-client": "npm install --prefix client",
+        "install-server": "npm install --prefix server",
         "build-client": "npm run build --prefix client",
-        "vercel-build": "npm run install-client && npm run build-client"
+        "start": "npm start --prefix server",
+        "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+        "vercel-build": "npm run install-all && npm run build-client"
     }
 }

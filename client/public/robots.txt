@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /UserDash
+Disallow: /UserDash/
+Disallow: /login
+Disallow: /register
+Disallow: /adlogin
+Disallow: /src/
+Disallow: /node_modules/
+
+Sitemap: https://computerexcellenceacademy.com/sitemap.xml

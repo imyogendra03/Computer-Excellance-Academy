@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { FiBookOpen, FiEdit3, FiPlus, FiSearch, FiType } from "react-icons/fi";
+import { motion, AnimatePresence } from "framer-motion";
+import { FiBookOpen, FiEdit3, FiPlus, FiSearch, FiType, FiX, FiCheck, FiTrash2, FiLayers, FiActivity } from "react-icons/fi";
 import AppToast from "../../components/ui/AppToast";
 import AppModal from "../../components/ui/AppModal";
+import { SkeletonTable, SkeletonStats } from "../../components/ui/SkeletonLoader";
 import "../../components/ui/app-ui.css";
 
 const initialForm = {
@@ -18,125 +20,68 @@ const Subject = () => {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [toast, setToast] = useState({
-    show: false,
-    message: "",
-    type: "success",
-  });
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   const isEditing = Boolean(editingId);
+  const apiUrl = import.meta.env.VITE_API_URL;
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(() => {
-      setToast({ show: false, message: "", type: "success" });
-    }, 2500);
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 2500);
   };
 
   const fetchSubjects = async () => {
     try {
       setFetching(true);
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/subject`);
+      const res = await axios.get(`${apiUrl}/api/subject`);
       setSubjects(res?.data?.data || []);
-    } catch (error) {
-      showToast("Failed to load subjects", "error");
-    } finally {
-      setFetching(false);
-    }
+    } catch (error) { showToast("Error loading subject index", "error"); }
+    finally { setFetching(false); }
   };
 
-  useEffect(() => {
-    fetchSubjects();
-  }, []);
+  useEffect(() => { fetchSubjects(); }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const openAddModal = () => {
-    setForm(initialForm);
-    setEditingId(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (item) => {
-    setForm({
-      subjectname: item.subjectname || "",
-      description: item.description || "",
-    });
-    setEditingId(item._id);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setForm(initialForm);
-    setEditingId(null);
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!form.subjectname || !form.description) {
-      showToast("Please fill in all fields", "error");
-      return;
-    }
-
+    if (!form.subjectname || !form.description) { showToast("Both name and description required", "error"); return; }
     try {
       setSaving(true);
-
-      if (isEditing) {
-        await axios.put(`${import.meta.env.VITE_API_URL}/api/subject/${editingId}`, form);
-        showToast("Subject updated successfully");
-      } else {
-        await axios.post(`${import.meta.env.VITE_API_URL}/api/subject`, form);
-        showToast("Subject added successfully");
-      }
-
-      closeModal();
-      fetchSubjects();
-    } catch (error) {
-      showToast("Sorry, something went wrong", "error");
-    } finally {
-      setSaving(false);
-    }
+      const token = localStorage.getItem("adminToken");
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      if (isEditing) await axios.put(`${apiUrl}/api/subject/${editingId}`, form, config);
+      else await axios.post(`${apiUrl}/api/subject`, form, config);
+      showToast(isEditing ? "Subject successfully updated" : "New subject registered");
+      setModalOpen(false); fetchSubjects();
+    } catch (error) { showToast("Operation encountered a sync error", "error"); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async (id) => {
-    const confirmed = window.confirm("Are you sure you want to delete this subject?");
-    if (!confirmed) return;
-
+    if (!window.confirm("Permanent Deletion: Proceed?")) return;
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/subject/${id}`);
-      showToast("Subject deleted successfully");
-      fetchSubjects();
-    } catch (error) {
-      showToast("Delete failed", "error");
-    }
+      const token = localStorage.getItem("adminToken");
+      await axios.delete(`${apiUrl}/api/subject/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      showToast("Subject removed from registry"); fetchSubjects();
+    } catch (error) { showToast("Deletion conflict: Protected record?", "error"); }
   };
 
   const filteredSubjects = useMemo(() => {
-    const keyword = search.toLowerCase();
-    return subjects.filter((item) => {
-      return (
-        item.subjectname?.toLowerCase().includes(keyword) ||
-        item.description?.toLowerCase().includes(keyword)
-      );
-    });
+    const k = search.toLowerCase();
+    return subjects.filter(i => i.subjectname?.toLowerCase().includes(k) || i.description?.toLowerCase().includes(k));
   }, [subjects, search]);
 
   return (
     <div className="app-page">
+      <AppToast
+        toast={toast}
+        onClose={() => setToast({ show: false, message: "", type: "success" })}
+      />
       <div className="container">
-        <AppToast
-          toast={toast}
-          onClose={() => setToast({ show: false, message: "", type: "success" })}
-        />
-
         <div className="app-hero mb-4">
           <div className="row align-items-center g-4">
             <div className="col-lg-8">
@@ -147,7 +92,7 @@ const Subject = () => {
             </div>
 
             <div className="col-lg-4 text-lg-end">
-              <button type="button" onClick={openAddModal} className="app-btn-primary">
+              <button type="button" onClick={() => { setForm(initialForm); setEditingId(null); setModalOpen(true); }} className="app-btn-primary">
                 <FiPlus className="me-2" />
                 Add Subject
               </button>
@@ -165,10 +110,8 @@ const Subject = () => {
 
           <div className="col-md-4">
             <div className="app-stat-card">
-              <div className="app-label-muted">Current Mode</div>
-              <h4 className="fw-bold mb-0">
-                {isEditing ? "Editing Subject" : "Creating Subject"}
-              </h4>
+              <div className="app-label-muted">Active Subjects</div>
+              <h4 className="fw-bold mb-0">{subjects.length}</h4>
             </div>
           </div>
 
@@ -232,7 +175,9 @@ const Subject = () => {
                         <td>
                           <span className="app-badge">{item.subjectname}</span>
                         </td>
-                        <td>{item.description}</td>
+                        <td>
+                          <span className="text-muted small">{item.description || "N/A"}</span>
+                        </td>
                         <td className="text-center">
                           <button
                             type="button"
@@ -271,7 +216,7 @@ const Subject = () => {
                           <span className="app-badge">{item.subjectname}</span>
                         </div>
 
-                        <div className="text-muted small mb-3">{item.description}</div>
+                        <div className="text-muted small mb-3">{item.description || "N/A"}</div>
 
                         <div className="d-flex gap-2">
                           <button
@@ -300,7 +245,7 @@ const Subject = () => {
 
         <AppModal
           open={modalOpen}
-          onClose={closeModal}
+          onClose={() => setModalOpen(false)}
           isEditing={isEditing}
           title={isEditing ? "Edit Subject" : "Add New Subject"}
           subtitle="Enter subject details before saving."
@@ -321,7 +266,7 @@ const Subject = () => {
               </div>
             </div>
 
-            <div className="mb-4">
+            <div className="mb-3">
               <label className="form-label fw-semibold">Description</label>
               <div className="app-input-wrap">
                 <FiType className="app-input__icon top" />
@@ -331,7 +276,7 @@ const Subject = () => {
                   onChange={handleChange}
                   rows="4"
                   className="form-control app-textarea"
-                  placeholder="Enter subject description"
+                  placeholder="Enter description"
                 />
               </div>
             </div>
@@ -341,7 +286,7 @@ const Subject = () => {
                 {saving ? "Saving..." : isEditing ? "Update Subject" : "Add Subject"}
               </button>
 
-              <button type="button" onClick={closeModal} className="app-btn-soft">
+              <button type="button" onClick={() => setModalOpen(false)} className="app-btn-soft">
                 Cancel
               </button>
             </div>

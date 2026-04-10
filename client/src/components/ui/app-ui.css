@@ -1,15 +1,22 @@
 .app-page {
   min-height: 100vh;
   padding: 1.5rem 0;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+  background:
+    radial-gradient(circle at top left, rgba(28, 157, 242, 0.08), transparent 20%),
+    radial-gradient(circle at top right, rgba(111, 60, 242, 0.08), transparent 18%),
+    linear-gradient(180deg, #fafdff 0%, #eef7ff 52%, #f6fbff 100%);
 }
 
 .app-hero {
   padding: 2rem;
   border-radius: 28px;
-  color: #fff;
-  background: linear-gradient(135deg, #0f172a, #1d4ed8, #4f46e5);
-  box-shadow: 0 20px 45px rgba(37, 99, 235, 0.22);
+  color: #1f2a4e;
+  background:
+    radial-gradient(circle at right top, rgba(82, 191, 255, 0.2), transparent 22%),
+    radial-gradient(circle at left bottom, rgba(111, 60, 242, 0.12), transparent 18%),
+    linear-gradient(135deg, #eef8ff 0%, #f1f5ff 46%, #fbfdff 100%);
+  border: 1px solid rgba(111, 60, 242, 0.12);
+  box-shadow: 0 20px 45px rgba(33, 17, 73, 0.08);
 }
 
 .app-hero__stat {
@@ -53,6 +60,66 @@
   color: #64748b;
 }
 
+/* --- Premium Loading & Skeletons --- */
+@keyframes app-shimmer {
+  0% { background-position: -468px 0; }
+  100% { background-position: 468px 0; }
+}
+
+.app-skeleton {
+  background: #f1f5f9;
+  background-image: linear-gradient(
+    to right,
+    #f1f5f9 0%,
+    #e2e8f0 20%,
+    #f1f5f9 40%,
+    #f1f5f9 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 104px;
+  display: inline-block;
+  position: relative;
+  animation-duration: 1.2s;
+  animation-fill-mode: forwards;
+  animation-iteration-count: infinite;
+  animation-name: app-shimmer;
+  animation-timing-function: linear;
+  border-radius: 8px;
+}
+
+/* Sleek Dark Variant for Skeletons */
+.app-skeleton-dark {
+  background: #1e293b;
+  background-image: linear-gradient(
+    to right,
+    #1e293b 0%,
+    #334155 20%,
+    #1e293b 40%,
+    #1e293b 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 104px;
+  display: inline-block;
+  position: relative;
+  animation-duration: 1.5s;
+  animation-fill-mode: forwards;
+  animation-iteration-count: infinite;
+  animation-name: app-shimmer;
+  animation-timing-function: linear;
+  border-radius: 12px;
+}
+
+.app-skeleton-text { height: 14px; width: 100%; margin-bottom: 8px; }
+.app-skeleton-title { height: 24px; width: 60%; margin-bottom: 12px; }
+.app-skeleton-circle { height: 48px; width: 48px; border-radius: 50%; }
+.app-skeleton-card { height: 180px; width: 100%; border-radius: 20px; }
+
+/* Page Transitions */
+.page-enter { opacity: 0; transform: translateY(10px); }
+.page-enter-active { opacity: 1; transform: translateY(0); transition: 0.4s ease-out; }
+.page-exit { opacity: 1; }
+.page-exit-active { opacity: 0; transition: 0.3s ease-in; }
+
 .app-input,
 .app-textarea {
   width: 100%;
@@ -61,6 +128,7 @@
   padding: 12px 14px 12px 40px;
   outline: none;
   transition: 0.2s ease;
+  background-clip: padding-box;
 }
 
 .app-input:focus,
@@ -80,16 +148,22 @@
 
 .app-input__icon {
   position: absolute;
-  left: 14px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: #64748b;
-  z-index: 1;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
 }
 
 .app-input__icon.top {
-  top: 16px;
+  top: 14px;
   transform: none;
+  pointer-events: none;
 }
 
 .app-btn-primary {
@@ -263,6 +337,195 @@
   border-radius: 18px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.app-hero h1,
+.app-hero h2,
+.app-hero h3,
+.app-panel h1,
+.app-panel h2,
+.app-panel h3,
+.app-panel h4,
+.app-stat-card h3,
+.app-stat-card h4,
+.app-mobile-card h4,
+.app-mobile-card h5,
+.app-mobile-card h6 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.app-hero p,
+.app-panel p,
+.app-stat-card p,
+.app-mobile-card p {
+  font-weight: 600;
+}
+
+@keyframes thumb-wave {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-thumb-fallback {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(120deg, var(--thumb-a, #2563eb), var(--thumb-b, #06b6d4), var(--thumb-a, #2563eb));
+  background-size: 200% 200%;
+  animation: thumb-wave 4s ease-in-out infinite;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+/* --- Dark Theme Variants --- */
+.app-page-dark {
+  min-height: 100vh;
+  padding: 1.5rem 0;
+  background: linear-gradient(135deg, #050816 0%, #0f1820 50%, #0a0e1a 100%);
+}
+
+.app-hero-dark {
+  padding: 2rem;
+  border-radius: 24px;
+  color: #e2e8f0;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.4);
+}
+
+.app-hero-dark h1,
+.app-hero-dark h2,
+.app-hero-dark h3,
+.app-hero-dark h4 {
+  color: #f1f5f9;
+}
+
+.app-panel-dark {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(20, 30, 48, 0.5) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.app-panel-dark .card-body {
+  background: transparent;
+}
+
+.app-panel-dark h1,
+.app-panel-dark h2,
+.app-panel-dark h3,
+.app-panel-dark h4,
+.app-panel-dark h5,
+.app-panel-dark h6 {
+  color: #f1f5f9;
+}
+
+.app-panel-dark p {
+  color: #cbd5e1;
+}
+
+.app-stat-card-dark {
+  height: 100%;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(20, 30, 48, 0.4) 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.app-stat-card-dark h3,
+.app-stat-card-dark h4 {
+  color: #f1f5f9;
+}
+
+.app-stat-card-dark p {
+  color: #cbd5e1;
+}
+
+.app-mobile-card-dark {
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(20, 30, 48, 0.3) 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.app-mobile-card-dark h4,
+.app-mobile-card-dark h5,
+.app-mobile-card-dark h6 {
+  color: #f1f5f9;
+}
+
+.app-mobile-card-dark > span,
+.app-mobile-card-dark p {
+  color: #cbd5e1;
+}
+
+/* Dark Theme Button Variants */
+.app-btn-primary-dark {
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+}
+
+.app-btn-primary-dark:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
+}
+
+/* --- Universal Input Icon Fixes --- */
+/* Fix for all positioned absolute icons in input groups */
+.position-relative .position-absolute[class*="icon"],
+.position-relative .position-absolute svg,
+.app-input-wrap .position-absolute {
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Ensure form controls with positioned icons have proper padding */
+.position-relative .form-control,
+.position-relative input.form-control {
+  padding-left: 44px !important;
+}
+
+/* Fix search inputs with ps-5 class */
+input[class*="ps-5"].form-control,
+input[class*="ps-5"].legacy-input,
+.legacy-input.ps-5,
+.form-control.ps-5 {
+  padding-left: 50px !important;
+}
+
+/* Icon positioning enhancements */
+.position-absolute[class*="icon"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure text inputs don't have text overlaid by icons */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+textarea {
+  background-clip: padding-box;
 }
 
 @media (max-width: 767px) {

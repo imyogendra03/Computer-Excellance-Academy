@@ -4,14 +4,10 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const path = require("path");
+const sanitizeRequest = require("./middlewares/sanitizeRequest");
 
 const app = express();
 
-// ============================================================================
-// MIDDLEWARE SETUP
-// ============================================================================
-
-// CORS Configuration - Restrict to frontend domain
 const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:5173",
   credentials: true,
@@ -21,16 +17,11 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Body Parser Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(sanitizeRequest());
 
-// Static Files
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-
-// ============================================================================
-// DATABASE CONNECTION
-// ============================================================================
 
 let dbConnected = false;
 
@@ -41,14 +32,12 @@ mongoose
   })
   .then(() => {
     dbConnected = true;
-    console.log("✅ MongoDB Connected Successfully");
   })
   .catch((err) => {
     dbConnected = false;
     console.error("❌ MongoDB Connection Error:", err.message);
   });
 
-// Middleware to check database connection before requests
 const checkDBConnection = (req, res, next) => {
   if (mongoose.connection.readyState !== 1) {
     return res.status(503).json({
@@ -62,11 +51,6 @@ const checkDBConnection = (req, res, next) => {
 
 app.use(checkDBConnection);
 
-// ============================================================================
-// ROUTE REGISTRATION
-// ============================================================================
-
-// Health Check Routes
 app.get("/", (req, res) => {
   return res.json({
     success: true,
@@ -108,50 +92,40 @@ app.get("/api/test-db", async (req, res) => {
   }
 });
 
-// Auth Routes
 app.use("/api/auth", require("./routes/auth"));
 
-// Admin Routes
 app.use("/api/admin", require("./routes/adminRoute"));
+app.use("/api/admin", require("./routes/adminContentRoute"));
+app.use("/api/admin/subject", require("./routes/subjectRoute"));
+app.use("/api/admin/chapter", require("./routes/chapterRoute"));
 
-// User/Examinee Routes
 app.use("/api/examinee", require("./routes/examineeRoute"));
 
-// Course Routes
 app.use("/api/course", require("./routes/courseRoute"));
 
-// Batch Routes
 app.use("/api/batch", require("./routes/batchRoute"));
 
-// Payment Routes
 app.use("/api/payment", require("./routes/paymentRoute"));
 
-// Dashboard Routes
 app.use("/api/dashboard", require("./routes/dashboardRoute"));
 
-// Note Routes (unified endpoint)
 app.use("/api/notes", require("./routes/noteRoute"));
 app.use("/api/note", require("./routes/noteRoute")); // Backward compatibility
 
-// Subject Routes
 app.use("/api/subject", require("./routes/subjectRoute"));
+app.use("/api/chapter", require("./routes/chapterRoute"));
 
-// Session Routes
 app.use("/api/session", require("./routes/sessionRoute"));
 
-// Question Routes
 app.use("/api/question", require("./routes/questionRoute"));
 
-// Examination Routes
 app.use("/api/exams", require("./routes/examinationRoute"));
 app.use("/api/examination", require("./routes/examinationRoute")); // Backward compatibility
 
-// Message Routes
 app.use("/api/message", require("./routes/messageRoute"));
-
-// ============================================================================
-// PROTECTED ROUTES EXAMPLE
-// ============================================================================
+app.use("/api/content", require("./routes/contentRoute"));
+app.use("/api/progress", require("./routes/progressRoute"));
+app.use("/api/user", require("./routes/userContentRoute"));
 
 const { verifyToken } = require("./middlewares/authMiddleware");
 
@@ -177,11 +151,6 @@ app.get("/api/profile", verifyToken, async (req, res) => {
   }
 });
 
-// ============================================================================
-// ERROR HANDLING MIDDLEWARE
-// ============================================================================
-
-// 404 Handler
 app.use((req, res) => {
   return res.status(404).json({
     success: false,
@@ -190,7 +159,6 @@ app.use((req, res) => {
   });
 });
 
-// Global Error Handler
 app.use((err, req, res, next) => {
   console.error("❌ Server Error:", err);
 
@@ -200,10 +168,6 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === "development" && { stack: err.stack })
   });
 });
-
-// ============================================================================
-// SERVER START
-// ============================================================================
 
 const PORT = process.env.PORT || 5000;
 
@@ -221,9 +185,7 @@ app.listen(PORT, () => {
   `);
 });
 
-// Graceful shutdown
 process.on("SIGTERM", () => {
-  console.log("SIGTERM signal received: closing HTTP server");
   mongoose.connection.close();
   process.exit(0);
 });

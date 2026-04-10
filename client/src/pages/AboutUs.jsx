@@ -1,828 +1,674 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { FiAward, FiBookOpen, FiCheckCircle, FiUsers, FiStar, FiSend } from "react-icons/fi";
+import MainNavbar from "../components/navigation/MainNavbar";
+import LegacyFooter from "../components/layout/LegacyFooter";
+import { useSEO } from "../components/SEOHelmet";
+import { seoConfig } from "../config/seoConfig";
+import AppToast from "../components/ui/AppToast";
 
-const navLinks = [
-  { label: "Home",      href: "/home",    icon: "🏠" },
-  { label: "Courses",   href: "/course",  icon: "📚", badge: "24+" },
-  { label: "PDF Notes", href: "/notes",   icon: "📄" },
-  { label: "About Us",  href: "/aboutus", icon: "👥" },
+const stats = [
+  { icon: FiUsers, value: "15,000+", label: "Students Trained" },
+  { icon: FiBookOpen, value: "24+", label: "Free Courses" },
+  { icon: FiAward, value: "1000+", label: "Certificates Issued" },
 ];
 
-const STATS = [
-  { icon: "🎓", num: "15,000+", label: "Happy Students",      desc: "Across 28 states" },
-  { icon: "📚", num: "24+",     label: "Free Courses",        desc: "Constantly updated" },
-  { icon: "🏆", num: "12,400+", label: "Certificates Issued", desc: "Resume-ready" },
-  { icon: "⭐", num: "4.9/5",   label: "Student Rating",      desc: "Verified reviews" },
-];
-
-const VALUES = [
-  { icon: "🆓", title: "Always Free",       desc: "Every course, certificate and PDF note is 100% free — no hidden costs, ever." },
-  { icon: "🎯", title: "Quality First",      desc: "Curriculum crafted by industry experts to ensure practical, job-ready skills." },
-  { icon: "🤝", title: "Student Support",    desc: "Live call support Mon–Sat, 10AM–12PM so no student is ever left behind." },
-  { icon: "🌍", title: "Accessible to All",  desc: "Digital literacy is a right, not a privilege — available to everyone in India." },
-  { icon: "📜", title: "Certified Learning", desc: "Industry-recognized certificates that boost your resume and LinkedIn profile." },
-  { icon: "🔄", title: "Lifetime Access",    desc: "Enroll once and access course content forever — rewatch anytime, at your pace." },
-];
-
-// ── TEACHERS ─────────────────────────────────────────────
-const TEACHERS = [
+const mentors = [
   {
-    name: "Prof. Ramesh Sharma",
-    role: "Founder & Computer Science Expert",
-    emoji: "👨‍🏫",
-    color: "#667eea",
-    exp: "15 Years",
-    edu: [
-      "M.Tech — Computer Science, IIT Delhi",
-      "B.Tech — Information Technology, NIT Jaipur",
-      "Certified Microsoft Office Specialist",
-    ],
-    subjects: ["Basic Computer", "MS Office", "Networking", "ADCA"],
-    achievement: "Trained 8,000+ students across India",
-    quote: "Education is the most powerful weapon to change the world.",
+    name: "Yogendra Kumar",
+    role: "Full Stack Mentor",
+    image: "/Yogendra Kumar.jpeg",
+    quote: "Project-based learning and practical confidence.",
   },
   {
-    name: "Priya Mehta",
-    role: "Web Development & Design Lead",
-    emoji: "👩‍💻",
-    color: "#f093fb",
-    exp: "9 Years",
-    edu: [
-      "MCA — Software Engineering, Pune University",
-      "B.Sc — Computer Science, Mumbai University",
-      "Google Certified UX Designer",
-    ],
-    subjects: ["HTML & CSS", "JavaScript", "React JS", "Graphic Design"],
-    achievement: "Built 50+ production-level web apps",
-    quote: "Good design is making something beautiful. Great design is making it work.",
+    name: "Ramesh Gupta",
+    role: "Operations Head",
+    image: "/Ramesh Chandra.jpeg",
+    quote: "Every learner deserves quality guidance.",
   },
   {
-    name: "Arun Verma",
-    role: "Accounting & Tally Prime Trainer",
-    emoji: "👨‍💼",
-    color: "#4facfe",
-    exp: "15 Years",
-    edu: [
-      "M.Com — Accounting & Finance, Delhi University",
-      "B.Com — Commerce, Agra University",
-      "Certified Tally Prime Professional",
-    ],
-    subjects: ["Tally Prime", "GST Filing", "MS Excel", "Accounting"],
-    achievement: "Placed 500+ students in accounting roles",
-    quote: "Numbers tell the truth — learn to speak their language.",
+    name: "Mukesh Shahu",
+    role: "Founder and Director",
+    image: "/MukeshShahu.jpeg",
+    quote: "Digital skills should be accessible to all.",
   },
   {
-    name: "Sneha Gupta",
-    role: "Graphic Design & Media Expert",
-    emoji: "👩‍🎨",
-    color: "#fa709a",
-    exp: "7 Years",
-    edu: [
-      "BFA — Visual Communication, NIFT Delhi",
-      "Diploma in Multimedia Design, MAAC",
-      "Adobe Certified Expert — Photoshop & Illustrator",
-    ],
-    subjects: ["Photoshop", "CorelDraw", "Canva", "Video Editing"],
-    achievement: "Designed for 30+ national brands",
-    quote: "Every pixel has a purpose — make it count.",
+    name: "Pankaj Kumar",
+    role: "Design Specialist",
+    image: "/Pankaj Kumar.jpeg",
+    quote: "Creative computer education for future careers.",
   },
 ];
 
-// ── CHIEF GUESTS ──────────────────────────────────────────
-const CHIEF_GUESTS = [
+const chiefGuests = [
   {
     name: "Dr. Arvind Khanna",
-    title: "IAS Officer — District Collector",
-    emoji: "🏛️",
-    color: "#667eea",
-    event: "Annual Convocation 2024",
-    quote: "Computer Excellence Academy is bridging the digital divide in our society. This initiative is truly commendable.",
+    role: "IAS Officer",
+    description: "Public policy expert and youth motivation speaker who guided our students on leadership, discipline, and career direction.",
+    image:
+      "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=500&q=80",
   },
   {
-    name: "Mrs. Sunita Rao",
-    title: "Principal — Govt. Degree College",
-    emoji: "🎓",
-    color: "#43e97b",
-    event: "Certification Ceremony 2023",
-    quote: "The quality of education and free access to certification makes this academy a beacon of hope for rural students.",
+    name: "Vikram Singh",
+    role: "TechBridge CEO",
+    description: "Industry leader sharing startup, digital product, and employability insights for students entering the tech ecosystem.",
+    image:
+      "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=500&q=80",
   },
   {
-    name: "Mr. Vikram Singh",
-    title: "CEO — TechBridge Solutions",
-    emoji: "💼",
-    color: "#f093fb",
-    event: "Industry Partnership Meet 2024",
-    quote: "I have personally hired CEA graduates. Their practical skills and dedication are unmatched in the industry.",
+    name: "Sunita Rao",
+    role: "Principal",
+    description: "Education mentor focused on structured learning habits, digital confidence, and classroom-to-career progression.",
+    image:
+      "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=500&q=80",
   },
   {
-    name: "Prof. Meera Joshi",
-    title: "Head of CS Dept — State University",
-    emoji: "🔬",
-    color: "#fa709a",
-    event: "Digital India Workshop 2024",
-    quote: "The curriculum here matches international standards. This academy is shaping the future of digital India.",
+    name: "Rahul Mehta",
+    role: "Startup Mentor",
+    description: "Career growth coach helping learners understand freelancing, entrepreneurship, and project-based computer learning.",
+    image:
+      "https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&w=500&q=80",
   },
 ];
 
-// ── GALLERY (Student + Certificate) ───────────────────────
-const GALLERY = [
-  { name: "Aarav Sharma",   course: "Web Development",       cert: "Advanced Web Dev Certificate",  emoji: "👨‍💻", color: "#667eea", city: "Lucknow",    year: "2024" },
-  { name: "Priya Singh",    course: "Basic Computer",        cert: "Computer Fundamentals Cert.",    emoji: "👩‍🎓", color: "#f093fb", city: "Kanpur",     year: "2024" },
-  { name: "Rahul Gupta",    course: "Tally Prime + GST",     cert: "Tally Prime Professional Cert.", emoji: "👨‍💼", color: "#43e97b", city: "Agra",       year: "2023" },
-  { name: "Neha Verma",     course: "Graphic Design",        cert: "Creative Design Certificate",    emoji: "👩‍🎨", color: "#fa709a", city: "Varanasi",   year: "2024" },
-  { name: "Amit Kumar",     course: "Python Programming",    cert: "Python Developer Certificate",   emoji: "👨‍🔬", color: "#84fab0", city: "Mathura",    year: "2024" },
-  { name: "Kavya Patel",    course: "MS Office Complete",    cert: "MS Office Expert Certificate",   emoji: "👩‍💻", color: "#ffecd2", city: "Allahabad",  year: "2023" },
-  { name: "Deepak Yadav",   course: "ADCA Diploma",          cert: "ADCA Diploma Certificate",       emoji: "👨‍🎓", color: "#4facfe", city: "Meerut",     year: "2024" },
-  { name: "Ritu Sharma",    course: "English Typing",        cert: "Typing Speed Certificate",       emoji: "👩‍💼", color: "#a18cd1", city: "Gorakhpur",  year: "2023" },
+const students = [
+  {
+    name: "Neha Singh",
+    role: "Web Dev Learner",
+    description: "Built responsive practice projects and improved confidence in HTML, CSS, and JavaScript fundamentals.",
+    image:
+      "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=500&q=80",
+  },
+  {
+    name: "Aman Verma",
+    role: "ADCA Student",
+    description: "Consistent batch performer with practical lab work, office productivity skills, and strong attendance progress.",
+    image:
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80",
+  },
+  {
+    name: "Lavanya T.",
+    role: "Typing Batch",
+    description: "Improved speed and accuracy with guided typing drills, weekly practice support, and mentor feedback.",
+    image:
+      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80",
+  },
+  {
+    name: "Kalyan Lohar",
+    role: "Programming Learner",
+    description: "Sharpened logical thinking through code exercises, assignments, and beginner-friendly project mentoring.",
+    image:
+      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80",
+  },
 ];
 
-// ── EVENTS ─────────────────────────────────────────────────
-const EVENTS = [
-  { title: "Annual Convocation Ceremony 2024",   date: "15 March 2024",    type: "Convocation",    emoji: "🎓", color: "#667eea", desc: "500+ students received their certificates in a grand ceremony attended by district officials and industry leaders.",        attendees: "500+", location: "City Hall, Lucknow" },
-  { title: "Digital India Workshop 2024",         date: "22 January 2024",  type: "Workshop",       emoji: "💻", color: "#43e97b", desc: "A hands-on workshop on emerging technologies, cybersecurity and the future of digital India — open to all students.",  attendees: "300+", location: "CEA Campus" },
-  { title: "Industry Partnership Meet 2024",      date: "10 February 2024", type: "Corporate",      emoji: "🤝", color: "#f093fb", desc: "Top companies met our graduates for placement discussions. 50+ students received job offers on the spot.",               attendees: "200+", location: "Tech Hub, Lucknow" },
-  { title: "Certification Ceremony 2023",         date: "20 December 2023", type: "Convocation",    emoji: "🏆", color: "#fa709a", desc: "Year-end celebration where 800+ students of the batch 2023 received their completion certificates with pride.",         attendees: "800+", location: "City Auditorium" },
-  { title: "Free Computer Literacy Camp",         date: "5 August 2023",    type: "Social",         emoji: "🌍", color: "#ffd700", desc: "A 3-day free camp in rural areas teaching basic computer skills to 1000+ underprivileged students.",                    attendees: "1000+", location: "Rural Uttar Pradesh" },
-  { title: "Graphic Design Hackathon 2023",       date: "18 October 2023",  type: "Competition",    emoji: "🎨", color: "#a18cd1", desc: "Students competed in a 24-hour design challenge. Top 10 designs were featured in a national digital magazine.",          attendees: "150+", location: "CEA Campus" },
+const events = [
+  {
+    title: "Digital Skill Workshop",
+    role: "Hands-on classroom lab",
+    description: "Interactive sessions where students practice office tools, internet basics, and live task-based computer learning.",
+    image:
+      "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    title: "Career Guidance Seminar",
+    role: "Expert speaker session",
+    description: "Mentor-led seminar covering career roadmap planning, course selection, and skill-building strategies for learners.",
+    image:
+      "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    title: "Certificate Ceremony",
+    role: "Celebration and recognition",
+    description: "A proud moment where our students receive certificates and celebrate their dedication, consistency, and progress.",
+    image:
+      "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    title: "Coding Practice Camp",
+    role: "Project and exam practice",
+    description: "Focused activity sessions designed to improve problem-solving, coding confidence, and exam readiness.",
+    image:
+      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    title: "Annual Learning Showcase",
+    role: "Student presentation day",
+    description: "Students present their learning outcomes, batch work, and practical achievements in front of peers and mentors.",
+    image:
+      "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    title: "Computer Awareness Camp",
+    role: "Community outreach",
+    description: "Awareness program focused on digital literacy, smart device usage, and computer education for new learners.",
+    image:
+      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+  },
 ];
+
+const stripRows = (items, rowClass, reverse = false) => (
+  <div className={`about-scroll ${reverse ? "reverse" : ""}`}>
+    <div className="about-scroll-track">
+      {[...items, ...items].map((item, index) => (
+        <div
+          key={`${rowClass}-${item.name || item.title}-${index}`}
+          className={`about-chip ${rowClass} ${rowClass === "mentor-row" && index % items.length === 2 ? "spotlight" : ""}`}
+        >
+          <div className="about-chip-media">
+            <img src={item.image} alt={item.name || item.title} />
+          </div>
+          <div className="about-chip-copy">
+            <span className="about-chip-kicker">
+              {rowClass === "mentor-row" && "CEA Mentor"}
+              {rowClass === "guest-row" && "Chief Guest"}
+              {rowClass === "student-row" && "Learner Story"}
+              {rowClass === "event-row" && "Campus Event"}
+            </span>
+            <h6>{item.name || item.title}</h6>
+            <p>{item.role || "CEA Event"}</p>
+            {(item.description || item.quote) && <small>{item.description || item.quote}</small>}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const AboutUs = () => {
   const navigate = useNavigate();
-  const [scrollY,       setScrollY]       = useState(0);
-  const [menuOpen,      setMenuOpen]      = useState(false);
-  const [galleryFilter, setGalleryFilter] = useState("All");
-  const [activeTeacher, setActiveTeacher] = useState(null);
+  useSEO(seoConfig.pages.about);
 
-  useEffect(() => {
-    const fn = () => {
-      setScrollY(window.scrollY);
-      if (window.scrollY > 10) setMenuOpen(false);
-    };
-    window.addEventListener("scroll", fn);
-    return () => window.removeEventListener("scroll", fn);
-  }, []);
+  const [rating, setRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
+
+  const isLoggedIn = Boolean(localStorage.getItem("token") || localStorage.getItem("userData"));
+
+  const showToast = (message, type = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 2500);
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!isLoggedIn) {
+      showToast("Please login first", "error");
+      return;
+    }
+    if (!reviewText.trim()) return;
+
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem("token") || localStorage.getItem("userToken");
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/review`, {
+        rating,
+        reviewText: reviewText.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showToast("Review submitted! Waiting for admin approval.");
+      setReviewText("");
+      setRating(5);
+    } catch (err) {
+      showToast("Submission failed", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <div style={{ fontFamily: "'Outfit','Segoe UI',sans-serif", background: "#f8f9ff", overflowX: "hidden" }}>
+    <div className="legacy-page">
+      <AppToast toast={toast} onClose={() => setToast({ show: false, message: "", type: "success" })} />
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@700;900&display=swap');
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
-
-        :root {
-          --primary: #6c3de8; --secondary: #f7156a; --accent: #00d4ff; --green: #10b981;
-          --text-dark: #1a1a2e; --text-muted: #6b7280;
-          --gradient-main:   linear-gradient(135deg,#0d0820 0%,#1a0640 50%,#2d1060 100%);
-          --gradient-accent: linear-gradient(135deg,#6c3de8,#f7156a);
-          --gradient-blue:   linear-gradient(90deg,#ffffff,#00d4ff);
-          --gradient-gold:   linear-gradient(135deg,#f7971e,#ffd200);
-          --shadow-card: 0 10px 40px rgba(0,0,0,0.08);
-          --shadow-glow: 0 0 40px rgba(108,61,232,0.25);
-          --radius: 20px;
+        .about-scroll {
+          width: 100%;
+          overflow: hidden;
+          padding: 4px 0;
+          mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
         }
-
-        /* ── NAVBAR ── */
-        .cea-nav { position:sticky;top:0;z-index:1000;width:100%;height:70px;padding:0 5%;display:flex;align-items:center;transition:background .35s,box-shadow .35s;font-family:'Outfit',sans-serif; }
-        .cea-nav.scrolled { background:rgba(13,8,32,.95);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid rgba(108,61,232,.25);box-shadow:0 4px 40px rgba(0,0,0,.45); }
-        .cea-nav.top { background:rgba(13,8,32,.65);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid rgba(108,61,232,.12); }
-        .nav-logo { display:flex;align-items:center;gap:11px;text-decoration:none;margin-right:auto;flex-shrink:0; }
-        .nav-logo-orb { width:42px;height:42px;border-radius:12px;background:var(--gradient-accent);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 0 20px rgba(108,61,232,.55);transition:transform .35s cubic-bezier(.23,1,.32,1); }
-        .nav-logo-orb:hover { transform:rotate(-10deg) scale(1.12); }
-        .nav-logo-text { display:flex;flex-direction:column; }
-        .nav-logo-main { font-size:.98rem;font-weight:800;line-height:1.15;background:var(--gradient-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
-        .nav-logo-sub  { font-size:.58rem;font-weight:500;letter-spacing:1.8px;text-transform:uppercase;color:rgba(255,255,255,.38);margin-top:1px; }
-        .nav-logo-line { height:2px;border-radius:2px;margin-top:3px;background:linear-gradient(90deg,#6c3de8,#00d4ff,#f7156a);background-size:200%;animation:shimmer 3s linear infinite; }
-        @keyframes shimmer { 0%{background-position:0%}100%{background-position:200%} }
-        .nav-menu { display:flex;align-items:center;gap:2px;list-style:none;margin:0 18px 0 0;padding:0; }
-        .nav-menu a { display:inline-flex;align-items:center;gap:5px;color:rgba(255,255,255,.72);text-decoration:none;font-size:.875rem;font-weight:500;white-space:nowrap;padding:8px 14px;border-radius:10px;transition:color .2s,background .2s;position:relative; }
-        .nav-menu a:hover { color:#fff;background:rgba(108,61,232,.22); }
-        .nav-menu a.active { color:#fff;background:rgba(108,61,232,.28); }
-        .nav-menu a.active::after { content:'';position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--primary),var(--accent)); }
-        .nav-badge { font-size:.58rem;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(247,21,106,.2);color:#f7156a;text-transform:uppercase; }
-        .live-dot { width:6px;height:6px;border-radius:50%;background:#f7156a;flex-shrink:0;animation:ldot 1.8s ease-in-out infinite; }
-        @keyframes ldot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(.7)} }
-        .nav-right { display:flex;align-items:center;gap:10px; }
-        .nav-divider { width:1px;height:22px;background:rgba(255,255,255,.1);flex-shrink:0; }
-        .support-pill { display:flex;align-items:center;gap:7px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.28);border-radius:50px;padding:6px 13px;cursor:default;white-space:nowrap; }
-        .support-dot   { width:7px;height:7px;border-radius:50%;background:var(--green);animation:ldot 1.5s infinite;flex-shrink:0; }
-        .support-label { font-size:.74rem;font-weight:600;color:var(--green); }
-        .btn-register  { border:1.5px solid rgba(108,61,232,.5);color:rgba(255,255,255,.85);background:transparent;border-radius:10px;padding:8px 18px;font-size:.84rem;font-weight:600;cursor:pointer;transition:all .22s;font-family:'Outfit',sans-serif;white-space:nowrap; }
-        .btn-register:hover { background:rgba(108,61,232,.2);border-color:rgba(108,61,232,.8);color:white; }
-        .btn-login-nav { position:relative;overflow:hidden;background:var(--gradient-accent);color:white;border:none;border-radius:10px;padding:9px 22px;font-size:.84rem;font-weight:700;cursor:pointer;transition:transform .25s,box-shadow .25s;font-family:'Outfit',sans-serif;box-shadow:0 4px 18px rgba(108,61,232,.45);white-space:nowrap; }
-        .btn-login-nav::before { content:'';position:absolute;inset:0;background:linear-gradient(135deg,#f7156a,#6c3de8);opacity:0;transition:opacity .3s; }
-        .btn-login-nav:hover::before { opacity:1; }
-        .btn-login-nav:hover { transform:translateY(-2px);box-shadow:0 8px 28px rgba(108,61,232,.6); }
-        .btn-login-nav span { position:relative;z-index:1; }
-        .hamburger { display:none;flex-direction:column;gap:5px;width:38px;height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);align-items:center;justify-content:center;cursor:pointer;transition:all .22s;flex-shrink:0; }
-        .hamburger:hover { background:rgba(108,61,232,.25);border-color:rgba(108,61,232,.4); }
-        .hamburger .bar { display:block;width:18px;height:1.8px;background:rgba(255,255,255,.8);border-radius:2px;transition:all .3s ease;transform-origin:center; }
-        .hamburger.open .bar:nth-child(1) { transform:translateY(6.8px) rotate(45deg); }
-        .hamburger.open .bar:nth-child(2) { opacity:0;transform:scaleX(0); }
-        .hamburger.open .bar:nth-child(3) { transform:translateY(-6.8px) rotate(-45deg); }
-        .mobile-drawer { position:fixed;top:70px;left:0;right:0;z-index:999;background:rgba(10,5,28,.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid rgba(108,61,232,.2);box-shadow:0 20px 60px rgba(0,0,0,.6);padding:16px 5% 22px;transform:translateY(-110%);opacity:0;transition:transform .35s cubic-bezier(.23,1,.32,1),opacity .3s;font-family:'Outfit',sans-serif; }
-        .mobile-drawer.open { transform:translateY(0);opacity:1; }
-        .mob-support { display:flex;align-items:center;gap:10px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:12px;padding:12px 14px;margin-bottom:12px; }
-        .mob-support-title { font-size:.84rem;font-weight:600;color:var(--green); }
-        .mob-support-sub   { font-size:.72rem;color:rgba(16,185,129,.7);margin-top:1px; }
-        .mob-links { display:flex;flex-direction:column;gap:3px;margin-bottom:14px; }
-        .mob-link { display:flex;align-items:center;justify-content:space-between;color:rgba(255,255,255,.75);text-decoration:none;font-size:.9rem;font-weight:500;padding:11px 14px;border-radius:11px;border:1px solid transparent;transition:all .2s; }
-        .mob-link:hover  { background:rgba(108,61,232,.2);color:white;border-color:rgba(108,61,232,.2); }
-        .mob-link.active { background:rgba(108,61,232,.25);color:white;border-color:rgba(108,61,232,.3); }
-        .mob-link-left { display:flex;align-items:center;gap:10px; }
-        .mob-chevron { font-size:13px;color:rgba(255,255,255,.28); }
-        .mob-hr { height:1px;background:rgba(255,255,255,.07);margin:8px 0; }
-        .mob-actions { display:flex;gap:10px; }
-        .mob-btn-reg   { flex:1;border:1.5px solid rgba(108,61,232,.5);color:rgba(255,255,255,.85);background:transparent;border-radius:11px;padding:12px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s; }
-        .mob-btn-reg:hover { background:rgba(108,61,232,.2);color:white; }
-        .mob-btn-login { flex:1;background:var(--gradient-accent);color:white;border:none;border-radius:11px;padding:12px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif;box-shadow:0 4px 18px rgba(108,61,232,.4); }
-
-        /* ── MARQUEE ── */
-        .mq { background:var(--gradient-accent);padding:11px 0;overflow:hidden;white-space:nowrap; }
-        .mq-i { display:inline-block;animation:mq 24s linear infinite;color:white;font-weight:600;font-size:.88rem; }
-        @keyframes mq { 0%{transform:translateX(100vw)}100%{transform:translateX(-100%)} }
-
-        /* ── HERO ── */
-        .hero { background:var(--gradient-main);position:relative;overflow:hidden;padding:100px 5% 120px;min-height:500px;display:flex;align-items:center;text-align:center;justify-content:center; }
-        .hero::before { content:'';position:absolute;width:700px;height:700px;background:radial-gradient(circle,rgba(108,61,232,.4) 0%,transparent 70%);top:-150px;right:-100px;border-radius:50%;animation:glw 8s ease-in-out infinite; }
-        .hero::after  { content:'';position:absolute;width:400px;height:400px;background:radial-gradient(circle,rgba(247,21,106,.18) 0%,transparent 70%);bottom:-80px;left:5%;border-radius:50%;animation:glw 10s ease-in-out infinite reverse; }
-        @keyframes glw { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1) translate(10px,-10px)} }
-        .hero-inner { position:relative;z-index:2;max-width:780px; }
-        .h-badge { display:inline-flex;align-items:center;gap:8px;background:rgba(108,61,232,.25);border:1px solid rgba(108,61,232,.45);padding:6px 18px;border-radius:50px;color:var(--accent);font-size:.82rem;font-weight:600;margin-bottom:22px;backdrop-filter:blur(10px); }
-        .h-badge span { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.6)} }
-        .hero h1 { font-family:'Playfair Display',serif;font-size:clamp(2.4rem,5vw,4rem);font-weight:900;color:#fff;line-height:1.12;margin-bottom:20px; }
-        .hero h1 em { font-style:normal;background:var(--gradient-gold);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
-        .hero p { color:rgba(255,255,255,.72);font-size:1.08rem;line-height:1.8;margin-bottom:36px;max-width:620px;margin-left:auto;margin-right:auto; }
-        .hero-btns { display:flex;gap:14px;justify-content:center;flex-wrap:wrap; }
-        .btn-hp { background:var(--gradient-accent);color:white;border:none;padding:15px 36px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;font-family:inherit;box-shadow:0 8px 30px rgba(108,61,232,.5); }
-        .btn-hp:hover { transform:translateY(-3px);box-shadow:0 14px 40px rgba(108,61,232,.6); }
-        .btn-hs { background:rgba(255,255,255,.08);color:white;border:1.5px solid rgba(255,255,255,.25);padding:15px 32px;border-radius:14px;font-size:1rem;font-weight:600;cursor:pointer;transition:all .3s;font-family:inherit;backdrop-filter:blur(10px); }
-        .btn-hs:hover { background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.5); }
-
-        /* ── STATS ── */
-        .stats-s { background:white;padding:60px 5%;box-shadow:var(--shadow-card); }
-        .stats-g { display:grid;grid-template-columns:repeat(4,1fr);gap:24px;max-width:1100px;margin:0 auto; }
-        .sc { text-align:center;padding:30px 20px;border-radius:var(--radius);border:2px solid #f0f0f8;transition:all .3s;position:relative;overflow:hidden; }
-        .sc::before { content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--gradient-accent);transform:scaleX(0);transition:transform .3s; }
-        .sc:hover::before { transform:scaleX(1); }
-        .sc:hover { transform:translateY(-6px);box-shadow:var(--shadow-glow);border-color:transparent; }
-        .sc-icon { font-size:2.4rem;margin-bottom:12px; }
-        .sc-num  { font-size:2.4rem;font-weight:900;background:var(--gradient-accent);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
-        .sc-lbl  { color:var(--text-muted);font-size:.88rem;font-weight:600;margin-top:6px; }
-        .sc-desc { color:#9ca3af;font-size:.76rem;margin-top:3px; }
-
-        /* ── SECTION COMMON ── */
-        .sec { padding:88px 5%; }
-        .sec-light { background:#f8f9ff; }
-        .sec-dark  { background:var(--gradient-main); }
-        .sec-white { background:white; }
-        .sh { text-align:center;margin-bottom:56px; }
-        .s-tag { display:inline-block;background:linear-gradient(135deg,rgba(108,61,232,.1),rgba(247,21,106,.1));border:1px solid rgba(108,61,232,.2);color:var(--primary);font-size:.78rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:5px 14px;border-radius:50px;margin-bottom:14px; }
-        .s-tag-w { background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#00d4ff; }
-        .s-title { font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;color:var(--text-dark);margin-bottom:14px;line-height:1.2; }
-        .s-title-w { color:white; }
-        .s-sub { color:var(--text-muted);font-size:.97rem;max-width:560px;margin:0 auto;line-height:1.8; }
-        .s-sub-w { color:rgba(255,255,255,.65); }
-
-        /* ── MISSION ── */
-        .mission-grid { display:grid;grid-template-columns:1fr 1fr;gap:72px;max-width:1100px;margin:0 auto;align-items:center; }
-        .mission-img-wrap { position:relative; }
-        .m-img { width:100%;border-radius:24px;object-fit:cover;height:400px;display:block; }
-        .m-badge { position:absolute;bottom:-20px;right:-20px;background:var(--gradient-accent);color:white;border-radius:18px;padding:20px 24px;text-align:center;box-shadow:0 12px 40px rgba(108,61,232,.5); }
-        .mb-num { font-size:2rem;font-weight:900; }
-        .mb-lbl { font-size:.78rem;font-weight:600;opacity:.9; }
-        .mission-content h2 { font-family:'Playfair Display',serif;font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:900;color:var(--text-dark);margin-bottom:18px;line-height:1.2; }
-        .mission-content h2 em { font-style:normal;background:var(--gradient-accent);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
-        .mission-content p { color:var(--text-muted);font-size:1rem;line-height:1.85;margin-bottom:16px; }
-        .m-checks { display:flex;flex-direction:column;gap:12px;margin-top:24px; }
-        .mck { display:flex;align-items:center;gap:12px;font-size:.92rem;color:var(--text-dark);font-weight:500; }
-        .mck-ic { width:28px;height:28px;border-radius:8px;background:rgba(108,61,232,.1);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0; }
-
-        /* ════════════════════════════════
-           TEACHERS SECTION
-        ════════════════════════════════ */
-        .teachers-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:28px;max-width:1100px;margin:0 auto; }
-        .teacher-card {
-          background:white;border-radius:24px;overflow:hidden;
-          border:1px solid #eeeef8;transition:all .35s cubic-bezier(.23,1,.32,1);
-          box-shadow:0 4px 20px rgba(0,0,0,.06);
+        .about-scroll-track {
+          display: flex;
+          width: max-content;
+          gap: 22px;
+          padding: 10px 0;
+          animation: aboutMarquee 32s linear infinite;
         }
-        .teacher-card:hover { transform:translateY(-8px);box-shadow:0 28px 64px rgba(108,61,232,.18);border-color:rgba(108,61,232,.22); }
-        .tc-head { display:flex;align-items:center;gap:20px;padding:28px 28px 0; }
-        .tc-avatar { width:88px;height:88px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:2.8rem;flex-shrink:0; }
-        .tc-info { flex:1; }
-        .tc-name { font-weight:900;font-size:1.05rem;color:var(--text-dark);margin-bottom:4px; }
-        .tc-role { font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px; }
-        .tc-exp-badge { display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;padding:4px 12px;border-radius:50px;background:rgba(108,61,232,.08);color:var(--primary); }
-        .tc-body { padding:20px 28px 28px; }
-        .tc-quote { font-size:.88rem;color:var(--text-muted);font-style:italic;line-height:1.7;padding:14px 16px;background:#f8f9ff;border-left:3px solid;border-radius:0 10px 10px 0;margin-bottom:18px; }
-        .tc-section-title { font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:10px;margin-top:16px; }
-        .tc-edu { display:flex;flex-direction:column;gap:8px; }
-        .tc-edu-item { display:flex;align-items:flex-start;gap:10px;font-size:.83rem;color:var(--text-dark); }
-        .tc-edu-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:6px; }
-        .tc-subjects { display:flex;gap:6px;flex-wrap:wrap;margin-top:12px; }
-        .tc-subj-pill { font-size:.72rem;font-weight:700;padding:4px 11px;border-radius:50px;border:1.5px solid;opacity:.9; }
-        .tc-achievement { display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px 14px;border-radius:12px; }
-        .tc-ach-icon { font-size:1.2rem; }
-        .tc-ach-text { font-size:.82rem;font-weight:600;color:var(--text-dark); }
-
-        /* ════════════════════════════════
-           CHIEF GUESTS
-        ════════════════════════════════ */
-        .guests-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:24px;max-width:1100px;margin:0 auto; }
-        .guest-card {
-          background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
-          border-radius:22px;padding:32px;backdrop-filter:blur(10px);
-          transition:all .3s;position:relative;overflow:hidden;
+        .about-scroll.reverse .about-scroll-track {
+          animation-direction: reverse;
         }
-        .guest-card::before { content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--gradient-accent);transform:scaleX(0);transition:transform .35s; }
-        .guest-card:hover::before { transform:scaleX(1); }
-        .guest-card:hover { background:rgba(255,255,255,.09);transform:translateY(-5px); }
-        .guest-top { display:flex;align-items:center;gap:18px;margin-bottom:20px; }
-        .guest-avatar { width:72px;height:72px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:2.2rem;flex-shrink:0; }
-        .guest-name  { font-weight:900;font-size:1rem;color:white;margin-bottom:4px; }
-        .guest-title { font-size:.78rem;color:rgba(255,255,255,.6);font-weight:500; }
-        .guest-event-badge { display:inline-flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;padding:4px 12px;border-radius:50px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.25);color:var(--accent);margin-bottom:14px; }
-        .guest-quote { font-size:.88rem;color:rgba(255,255,255,.72);line-height:1.8;font-style:italic;padding-left:14px;border-left:2px solid rgba(255,255,255,.2); }
-        .guest-quote-icon { font-size:1.4rem;color:rgba(255,255,255,.2);margin-bottom:8px; }
-
-        /* ════════════════════════════════
-           GALLERY SECTION
-        ════════════════════════════════ */
-        .gallery-filters { display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:40px; }
-        .gf-btn { padding:8px 20px;border-radius:50px;border:1.5px solid rgba(108,61,232,.18);background:transparent;font-size:.83rem;font-weight:600;color:var(--text-muted);cursor:pointer;transition:all .2s;font-family:inherit; }
-        .gf-btn.on { background:var(--gradient-accent);color:white;border-color:transparent;box-shadow:0 4px 16px rgba(108,61,232,.35); }
-        .gf-btn:hover:not(.on) { border-color:var(--primary);color:var(--primary); }
-        .gallery-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:20px;max-width:1200px;margin:0 auto; }
-        .gallery-card {
-          border-radius:18px;overflow:hidden;background:white;
-          border:1px solid #eeeef8;transition:all .35s cubic-bezier(.23,1,.32,1);
-          box-shadow:0 4px 16px rgba(0,0,0,.06);
+        .about-chip {
+          flex: 0 0 auto;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          position: relative;
+          overflow: hidden;
+          border-radius: 24px;
+          padding: 18px;
+          min-width: 290px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(251,247,255,0.98));
+          box-shadow: 0 14px 34px rgba(27, 14, 61, 0.1);
+          isolation: isolate;
         }
-        .gallery-card:hover { transform:translateY(-8px) scale(1.02);box-shadow:0 20px 50px rgba(108,61,232,.2);border-color:rgba(108,61,232,.22); }
-        .gc-photo { height:160px;display:flex;align-items:center;justify-content:center;font-size:3.8rem;position:relative;overflow:hidden; }
-        .gc-photo::after { content:'';position:absolute;inset:0;opacity:.12;background:inherit; }
-        .gc-cert-badge { position:absolute;bottom:10px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;padding:4px 12px;border-radius:50px;background:rgba(0,0,0,.55);color:white;backdrop-filter:blur(6px); }
-        .gc-body { padding:16px; }
-        .gc-name   { font-weight:800;font-size:.92rem;color:var(--text-dark);margin-bottom:3px; }
-        .gc-course { font-size:.75rem;color:var(--primary);font-weight:600;margin-bottom:6px; }
-        .gc-meta   { display:flex;align-items:center;justify-content:space-between; }
-        .gc-city   { font-size:.72rem;color:var(--text-muted); }
-        .gc-year   { font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:5px;background:rgba(108,61,232,.08);color:var(--primary); }
-
-        /* ════════════════════════════════
-           EVENTS SECTION
-        ════════════════════════════════ */
-        .events-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1200px;margin:0 auto; }
-        .event-card {
-          background:white;border-radius:22px;overflow:hidden;
-          border:1px solid #eeeef8;transition:all .35s cubic-bezier(.23,1,.32,1);
-          box-shadow:0 4px 16px rgba(0,0,0,.06);display:flex;flex-direction:column;
+        .about-chip::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          padding: 1px;
+          border-radius: inherit;
+          background: linear-gradient(135deg, rgba(111,60,242,0.9), rgba(242,31,133,0.7), rgba(82,191,255,0.85));
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          animation: aboutBorderFlow 6s linear infinite;
+          z-index: 0;
         }
-        .event-card:hover { transform:translateY(-8px);box-shadow:0 24px 56px rgba(108,61,232,.18);border-color:rgba(108,61,232,.2); }
-        .ev-head { height:130px;display:flex;align-items:center;justify-content:center;font-size:3.6rem;position:relative;overflow:hidden; }
-        .ev-head::after { content:'';position:absolute;inset:0;opacity:.12;background:inherit; }
-        .ev-type-badge { position:absolute;top:12px;left:12px;font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;padding:4px 11px;border-radius:50px;background:rgba(0,0,0,.5);color:white;backdrop-filter:blur(6px); }
-        .ev-date-badge { position:absolute;top:12px;right:12px;font-size:.66rem;font-weight:700;padding:4px 11px;border-radius:50px;background:rgba(108,61,232,.8);color:white; }
-        .ev-body { padding:20px;flex:1;display:flex;flex-direction:column; }
-        .ev-title { font-weight:800;font-size:.97rem;color:var(--text-dark);margin-bottom:10px;line-height:1.4; }
-        .ev-desc  { font-size:.82rem;color:var(--text-muted);line-height:1.7;flex:1;margin-bottom:14px; }
-        .ev-meta  { display:flex;gap:12px;align-items:center;padding-top:12px;border-top:1px solid #f0f0f8; }
-        .ev-meta-item { display:flex;align-items:center;gap:5px;font-size:.75rem;color:var(--text-muted); }
-        .ev-meta-item strong { color:var(--text-dark);font-weight:700; }
-
-        /* ── VALUES ── */
-        .values-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1100px;margin:0 auto; }
-        .v-card { background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius);padding:28px 24px;transition:all .3s;backdrop-filter:blur(10px); }
-        .v-card:hover { background:rgba(255,255,255,.1);transform:translateY(-5px); }
-        .v-icon { width:56px;height:56px;background:rgba(108,61,232,.3);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;margin-bottom:16px;border:1px solid rgba(108,61,232,.3); }
-        .v-title { color:white;font-weight:700;font-size:.95rem;margin-bottom:8px; }
-        .v-desc  { color:rgba(255,255,255,.62);font-size:.84rem;line-height:1.75; }
-
-        /* ── CONTACT ── */
-        .contact-grid { display:grid;grid-template-columns:1fr 1fr;gap:48px;max-width:1000px;margin:0 auto;align-items:start; }
-        .contact-info { display:flex;flex-direction:column;gap:16px; }
-        .ci { display:flex;align-items:center;gap:16px;padding:18px 20px;background:white;border-radius:16px;border:1px solid #eeeef8;transition:all .3s;box-shadow:0 4px 16px rgba(0,0,0,.04); }
-        .ci:hover { transform:translateY(-3px);box-shadow:0 12px 32px rgba(108,61,232,.12);border-color:rgba(108,61,232,.2); }
-        .ci-icon { width:46px;height:46px;border-radius:12px;background:var(--gradient-accent);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0; }
-        .ci-label { font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px; }
-        .ci-val a, .ci-val span { font-size:.92rem;font-weight:600;color:var(--text-dark);text-decoration:none;transition:color .2s; }
-        .ci-val a:hover { color:var(--primary); }
-        .ch { background:var(--gradient-main);border-radius:20px;padding:30px; }
-        .ch-title { font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:900;color:white;margin-bottom:18px; }
-        .ch-row { display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08); }
-        .ch-row:last-of-type { border-bottom:none; }
-        .ch-day  { font-size:.85rem;color:rgba(255,255,255,.7);font-weight:500; }
-        .ch-time { font-size:.85rem;font-weight:700; }
-        .ch-time.open   { color:#10b981; }
-        .ch-time.closed { color:rgba(255,255,255,.3); }
-        .ch-pill { display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);border-radius:50px;padding:8px 16px;margin-top:18px; }
-        .ch-dot  { width:7px;height:7px;border-radius:50%;background:#10b981;animation:ldot 1.5s infinite; }
-        .ch-pill-text { font-size:.8rem;font-weight:600;color:#10b981; }
-
-        /* ── CTA ── */
-        .cta { background:var(--gradient-accent);padding:90px 5%;text-align:center;position:relative;overflow:hidden; }
-        .cta::before { content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
-        .cta-title { font-family:'Playfair Display',serif;font-size:clamp(2rem,4vw,3rem);font-weight:900;color:white;margin-bottom:14px;position:relative; }
-        .cta-sub { color:rgba(255,255,255,.85);font-size:1.03rem;margin-bottom:36px;position:relative; }
-        .cta-btns { display:flex;gap:14px;justify-content:center;flex-wrap:wrap;position:relative; }
-        .btn-cw { background:white;color:var(--primary);border:none;padding:15px 40px;border-radius:14px;font-size:1rem;font-weight:800;cursor:pointer;transition:all .3s;font-family:inherit;box-shadow:0 8px 30px rgba(0,0,0,.18); }
-        .btn-cw:hover { transform:translateY(-3px);box-shadow:0 14px 40px rgba(0,0,0,.28); }
-        .btn-co { background:transparent;color:white;border:2px solid rgba(255,255,255,.6);padding:13px 32px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s;font-family:inherit; }
-        .btn-co:hover { background:rgba(255,255,255,.15);border-color:white; }
-
-        /* ── FOOTER ── */
-        .footer { background:#080514;padding:60px 5% 28px;color:rgba(255,255,255,.65); }
-        .ft-g { display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:44px;max-width:1100px;margin:0 auto 50px; }
-        .ft-lw { display:flex;align-items:center;gap:10px;margin-bottom:14px; }
-        .ft-ln { font-weight:800;font-size:1rem;background:var(--gradient-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
-        .ft-d  { font-size:.87rem;line-height:1.85;margin-bottom:22px;margin-top:10px; }
-        .socs  { display:flex;gap:10px; }
-        .soc   { width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;color:white;transition:all .2s; }
-        .soc:hover { background:var(--gradient-accent);border-color:transparent;transform:translateY(-2px); }
-        .ft-h  { color:white;font-weight:700;font-size:.92rem;margin-bottom:18px; }
-        .ft-l  { list-style:none;display:flex;flex-direction:column;gap:9px; }
-        .ft-l a { color:rgba(255,255,255,.55);text-decoration:none;font-size:.85rem;transition:color .2s; }
-        .ft-l a:hover { color:var(--accent); }
-        .ft-bot { border-top:1px solid rgba(255,255,255,.07);padding-top:24px;text-align:center;font-size:.82rem;max-width:1100px;margin:0 auto; }
-
-        /* Scroll top */
-        .scroll-top { position:fixed;bottom:28px;right:28px;z-index:999;width:46px;height:46px;border-radius:13px;background:var(--gradient-accent);border:none;color:white;font-size:1.2rem;cursor:pointer;box-shadow:0 8px 28px rgba(108,61,232,.5);transition:all .3s;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none; }
-        .scroll-top.show { opacity:1;pointer-events:auto; }
-        .scroll-top:hover { transform:translateY(-4px); }
-
-        /* ── RESPONSIVE ── */
-        @media(max-width:1060px){ .nav-menu{display:none} .support-pill{display:none} .btn-register{display:none} .btn-login-nav{display:none} .nav-divider{display:none} .hamburger{display:flex} .teachers-grid{grid-template-columns:1fr} .guests-grid{grid-template-columns:1fr} .gallery-grid{grid-template-columns:repeat(2,1fr)} .events-grid{grid-template-columns:repeat(2,1fr)} .values-grid{grid-template-columns:repeat(2,1fr)} .contact-grid{grid-template-columns:1fr} .ft-g{grid-template-columns:1fr 1fr;gap:30px} .stats-g{grid-template-columns:repeat(2,1fr)} .mission-grid{grid-template-columns:1fr;gap:40px} }
-        @media(max-width:640px){ .gallery-grid{grid-template-columns:1fr 1fr} .events-grid{grid-template-columns:1fr} .values-grid{grid-template-columns:1fr} .ft-g{grid-template-columns:1fr} .nav-logo-main{font-size:.82rem} .nav-logo-sub{display:none} .nav-logo-line{display:none} }
+        .about-chip::after {
+          content: "";
+          position: absolute;
+          inset: auto -25% -62% auto;
+          width: 180px;
+          height: 180px;
+          background: radial-gradient(circle, rgba(111, 60, 242, 0.16), transparent 70%);
+          z-index: 0;
+        }
+        .about-chip > * {
+          position: relative;
+          z-index: 1;
+        }
+        .about-chip:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 24px 50px rgba(27, 14, 61, 0.16);
+        }
+        .about-chip-media {
+          position: relative;
+          flex: 0 0 auto;
+          border-radius: 22px;
+        }
+        .about-chip-media::before {
+          content: "";
+          position: absolute;
+          inset: -6px;
+          border-radius: 26px;
+          background: conic-gradient(from 0deg, rgba(111,60,242,0.9), rgba(242,31,133,0.85), rgba(82,191,255,0.85), rgba(111,60,242,0.9));
+          filter: blur(8px);
+          opacity: 0.85;
+          animation: aboutSpin 5.5s linear infinite;
+          z-index: -1;
+        }
+        .about-chip img {
+          width: 84px;
+          height: 84px;
+          display: block;
+          border-radius: 20px;
+          object-fit: cover;
+          border: 3px solid rgba(255, 255, 255, 0.82);
+          box-shadow: 0 12px 22px rgba(39, 17, 97, 0.18);
+        }
+        .about-chip-copy {
+          max-width: 320px;
+        }
+        .about-chip-kicker {
+          display: inline-flex;
+          margin-bottom: 8px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: #f3eaff;
+          color: #7a49dd;
+          font-size: 0.7rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .about-chip h6 {
+          margin: 0;
+          font-family: "Outfit", sans-serif !important;
+          font-size: 1.1rem;
+          font-weight: 800;
+          color: #201447;
+          line-height: 1.2;
+        }
+        .about-chip p {
+          margin: 5px 0 0;
+          font-size: 0.88rem;
+          color: #6f6495;
+          font-weight: 700;
+        }
+        .about-chip small {
+          display: block;
+          margin-top: 8px;
+          color: #57497e;
+          font-size: 0.84rem;
+          line-height: 1.6;
+          font-weight: 600;
+        }
+        .mentor-row {
+          min-width: 430px;
+          padding: 22px 24px;
+        }
+        .mentor-row img {
+          width: 98px;
+          height: 98px;
+        }
+        .mentor-row.spotlight {
+          transform: translateY(-3px) scale(1.03);
+          background: linear-gradient(180deg, #ffffff, #f9f1ff);
+          box-shadow: 0 24px 46px rgba(73, 24, 165, 0.18);
+        }
+        .mentor-row.spotlight img {
+          width: 132px;
+          height: 132px;
+          border-radius: 28px;
+        }
+        .guest-row {
+          min-width: 540px;
+          padding: 22px 24px;
+        }
+        .guest-row img {
+          width: 158px;
+          height: 158px;
+          border-radius: 30px;
+        }
+        .guest-row .about-chip-copy {
+          max-width: 320px;
+        }
+        .student-row {
+          min-width: 420px;
+          padding: 20px 22px;
+        }
+        .student-row img {
+          width: 108px;
+          height: 108px;
+          border-radius: 24px;
+        }
+        .student-row .about-chip-copy {
+          max-width: 250px;
+        }
+        .event-row {
+          min-width: 560px;
+          align-items: stretch;
+          padding: 14px;
+        }
+        .event-row .about-chip-media {
+          align-self: stretch;
+        }
+        .event-row img {
+          width: 230px;
+          height: 168px;
+          border-radius: 22px;
+        }
+        .event-row .about-chip-copy {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          max-width: 280px;
+        }
+        .about-highlight-box {
+          padding: 22px;
+          border-radius: 24px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+          border: 1px solid rgba(255,255,255,0.12);
+          backdrop-filter: blur(10px);
+        }
+        .about-bullet {
+          padding: 14px 16px;
+          border-radius: 18px;
+          background: linear-gradient(180deg, #ffffff, #faf6ff);
+          border: 1px solid #eadfff;
+          box-shadow: 0 10px 24px rgba(29, 16, 67, 0.06);
+          font-weight: 700;
+        }
+        @keyframes aboutBorderFlow {
+          0% { filter: hue-rotate(0deg); }
+          100% { filter: hue-rotate(360deg); }
+        }
+        @keyframes aboutSpin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes aboutMarquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        @media (max-width: 991px) {
+          .mentor-row,
+          .guest-row,
+          .event-row {
+            min-width: 360px;
+          }
+          .student-row {
+            min-width: 340px;
+          }
+        }
+        @media (max-width: 767px) {
+          .about-scroll-track {
+            gap: 16px;
+            animation-duration: 24s;
+          }
+          .about-chip,
+          .mentor-row,
+          .guest-row,
+          .student-row,
+          .event-row {
+            min-width: 300px;
+            padding: 16px;
+          }
+          .mentor-row img,
+          .student-row img {
+            width: 82px;
+            height: 82px;
+          }
+          .mentor-row.spotlight img,
+          .guest-row img {
+            width: 102px;
+            height: 102px;
+          }
+          .student-row img {
+            width: 88px;
+            height: 88px;
+          }
+          .event-row img {
+            width: 138px;
+            height: 112px;
+          }
+          .about-chip h6 {
+            font-size: 1rem;
+          }
+          .about-chip p,
+          .about-chip small {
+            font-size: 0.8rem;
+          }
+        }
       `}</style>
 
-      {/* ══ NAVBAR ══ */}
-      <nav className={`cea-nav ${scrollY > 15 ? "scrolled" : "top"}`}>
-        <Link to="/" className="nav-logo">
-          <div className="nav-logo-orb">💻</div>
-          <div className="nav-logo-text">
-            <span className="nav-logo-main">Computer Excellence Academy</span>
-            <span className="nav-logo-sub">Digital Learning Platform</span>
-            <div className="nav-logo-line" />
-          </div>
-        </Link>
-        <ul className="nav-menu">
-          {navLinks.map(({ label, href, icon, badge }) => (
-            <li key={href}>
-              <Link to={href} className={window.location.pathname === href ? "active" : ""}>
-                {icon} {label}
-                {badge && <span className="nav-badge">{badge}</span>}
-              </Link>
-            </li>
-          ))}
-          <li><Link to="#" style={{ color: "#f7156a" }}><span className="live-dot" /> Live Class</Link></li>
-        </ul>
-        <div className="nav-right">
-          <div className="support-pill"><div className="support-dot" /><span className="support-label">Support Open</span></div>
-          <div className="nav-divider" />
-          <button className="btn-register" onClick={() => navigate("/")}>Register</button>
-          <button className="btn-login-nav" onClick={() => navigate("/")}><span>Login →</span></button>
-          <div className={`hamburger ${menuOpen ? "open" : ""}`} onClick={() => setMenuOpen(o => !o)}>
-            <span className="bar" /><span className="bar" /><span className="bar" />
-          </div>
-        </div>
-      </nav>
+      <MainNavbar />
 
-      {/* Mobile Drawer */}
-      <div className={`mobile-drawer ${menuOpen ? "open" : ""}`}>
-        <div className="mob-support"><div className="support-dot" /><div><div className="mob-support-title">Support Open Now</div><div className="mob-support-sub">Mon–Sat · 10AM – 12PM</div></div></div>
-        <div className="mob-links">
-          {navLinks.map(({ label, href, icon, badge }) => (
-            <Link key={href} to={href} className={`mob-link ${window.location.pathname === href ? "active" : ""}`}>
-              <span className="mob-link-left">
-                {icon} {label}
-                {badge && <span className="nav-badge">{badge}</span>}
-              </span>
-              <span className="mob-chevron">›</span>
-            </Link>
-          ))}
-          <Link to="#" className="mob-link" style={{ color: "#f7156a" }}>
-            <span className="mob-link-left">
-              <span className="live-dot" /> Live Class
-            </span>
-            <span className="mob-chevron">›</span>
-          </Link>
-        </div>
-        <div className="mob-hr" />
-        <div className="mob-actions">
-          <button className="mob-btn-reg"   onClick={() => navigate("/")}>Register</button>
-          <button className="mob-btn-login" onClick={() => navigate("/")}>Login →</button>
-        </div>
-      </div>
-
-      {/* ══ MARQUEE ══ */}
-      <div className="mq"><span className="mq-i">🎓 15,000+ Happy Students &nbsp;•&nbsp; 📚 24+ Free Courses &nbsp;•&nbsp; 🏆 Free Certification &nbsp;•&nbsp; 📞 Call Support Mon–Sat 10AM–12PM &nbsp;•&nbsp; 📄 500+ PDF Notes &nbsp;•&nbsp; ⭐ 4.9/5 Rating &nbsp;•&nbsp; 🌍 Available Across India &nbsp;&nbsp;&nbsp;</span></div>
-
-      {/* ══ HERO ══ */}
-      <section className="hero">
-        <div className="hero-inner">
-          <div className="h-badge"><span />Empowering India Since 2020</div>
-          <h1>About <em>Computer Excellence</em> Academy</h1>
-          <p>India's leading free digital education platform — built on a mission to make quality computer education accessible to every student, everywhere.</p>
-          <div className="hero-btns">
-            <button className="btn-hp" onClick={() => navigate("/course")}>📚 Explore Courses</button>
-            <button className="btn-hs" onClick={() => document.getElementById("contact").scrollIntoView({ behavior:"smooth" })}>📞 Contact Us</button>
+      <section className="legacy-hero">
+        <div className="container legacy-hero-inner">
+          <span className="legacy-pill dark">About Computer Excellence Academy</span>
+          <h1 className="legacy-hero-title">
+            Meet the <span className="accent">Mentors, Guests</span> and Learners Driving CEA Forward
+          </h1>
+          <p className="legacy-hero-subtitle">
+            Computer Excellence Academy blends practical computer education, mentorship, community events,
+            and student success stories into one professional digital learning ecosystem.
+          </p>
+          <div className="legacy-actions">
+            <button className="legacy-btn primary" onClick={() => navigate("/courses")}>
+              Explore Courses
+            </button>
+            <button className="legacy-btn ghost" onClick={() => navigate("/support")}>
+              Contact Support
+            </button>
           </div>
         </div>
       </section>
 
-      {/* ══ STATS ══ */}
-      <section className="stats-s">
-        <div className="stats-g">
-          {STATS.map((s,i) => (
-            <div className="sc" key={i}>
-              <div className="sc-icon">{s.icon}</div>
-              <div className="sc-num">{s.num}</div>
-              <div className="sc-lbl">{s.label}</div>
-              <div className="sc-desc">{s.desc}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══ MISSION ══ */}
-      <section className="sec sec-light">
-        <div className="mission-grid">
-          <div className="mission-img-wrap">
-            <img className="m-img" src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=800&q=80" alt="Our Mission" />
-            <div className="m-badge"><div className="mb-num">4+ Yrs</div><div className="mb-lbl">of Excellence</div></div>
-          </div>
-          <div className="mission-content">
-            <div className="s-tag">🎯 Our Mission</div>
-            <h2>Making <em>Digital Education</em> Free for Every Indian</h2>
-            <p>At Computer Excellence Academy, we believe quality computer education should never come with a price tag. We provide practical, job-ready courses taught by industry experts — completely free.</p>
-            <div className="m-checks">
-              {["100% Free — Always, No Hidden Fees","Expert-led Live & Recorded Classes","Free PDF Notes & Study Material","Industry-recognized Free Certificates","Live Call Support Mon–Sat 10AM–12PM","Mobile, Tablet & Desktop Accessible"].map((item,i) => (
-                <div className="mck" key={i}><div className="mck-ic">✅</div>{item}</div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════════
-          TEACHERS SECTION
-      ══════════════════════════════ */}
-      <section className="sec sec-white">
-        <div className="sh">
-          <div className="s-tag">👨‍🏫 Expert Faculty</div>
-          <h2 className="s-title">Meet Our Teachers</h2>
-          <p className="s-sub">Learn from seasoned professionals — their education, experience and passion make the difference</p>
-        </div>
-        <div className="teachers-grid">
-          {TEACHERS.map((t, i) => (
-            <div className="teacher-card" key={i}>
-              <div className="tc-head">
-                <div className="tc-avatar" style={{ background:`${t.color}18`, boxShadow:`0 0 0 3px ${t.color}30` }}>{t.emoji}</div>
-                <div className="tc-info">
-                  <div className="tc-name">{t.name}</div>
-                  <div className="tc-role" style={{ color: t.color }}>{t.role}</div>
-                  <div className="tc-exp-badge">🕐 {t.exp} Experience</div>
-                </div>
-              </div>
-              <div className="tc-body">
-                <div className="tc-quote" style={{ borderLeftColor: t.color }}>"{t.quote}"</div>
-
-                <div className="tc-section-title">🎓 Education & Qualifications</div>
-                <div className="tc-edu">
-                  {t.edu.map((e, ei) => (
-                    <div className="tc-edu-item" key={ei}>
-                      <div className="tc-edu-dot" style={{ background: t.color }} />
-                      {e}
+      <section className="legacy-section">
+        <div className="container">
+          <div className="row g-4">
+            {stats.map((item) => (
+              <div className="col-md-4" key={item.label}>
+                <div className="legacy-card h-100">
+                  <div className="legacy-card-body text-center">
+                    <div className="legacy-icon-box mx-auto">
+                      <item.icon />
                     </div>
-                  ))}
+                    <div className="legacy-counter">{item.value}</div>
+                    <div className="legacy-mini fw-semibold">{item.label}</div>
+                  </div>
                 </div>
-
-                <div className="tc-section-title">📚 Subjects Taught</div>
-                <div className="tc-subjects">
-                  {t.subjects.map((s, si) => (
-                    <span className="tc-subj-pill" key={si} style={{ color: t.color, borderColor: `${t.color}40`, background: `${t.color}0d` }}>{s}</span>
-                  ))}
-                </div>
-
-                <div className="tc-achievement" style={{ background:`${t.color}0d`, borderRadius:"10px" }}>
-                  <span className="tc-ach-icon">🏆</span>
-                  <span className="tc-ach-text">{t.achievement}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══════════════════════════════
-          CHIEF GUESTS SECTION
-      ══════════════════════════════ */}
-      <section className="sec sec-dark">
-        <div className="sh">
-          <div className="s-tag s-tag-w">🌟 Distinguished Visitors</div>
-          <h2 className="s-title s-title-w">Chief Guests & Dignitaries</h2>
-          <p className="s-sub s-sub-w">Honored guests who have graced our events and shared their inspiring words with our students</p>
-        </div>
-        <div className="guests-grid">
-          {CHIEF_GUESTS.map((g, i) => (
-            <div className="guest-card" key={i}>
-              <div className="guest-top">
-                <div className="guest-avatar" style={{ background:`${g.color}22`, boxShadow:`0 0 0 2px ${g.color}44` }}>{g.emoji}</div>
-                <div>
-                  <div className="guest-name">{g.name}</div>
-                  <div className="guest-title">{g.title}</div>
-                </div>
-              </div>
-              <div className="guest-event-badge">📅 {g.event}</div>
-              <div className="guest-quote-icon">"</div>
-              <div className="guest-quote">{g.quote}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══════════════════════════════
-          GALLERY SECTION
-      ══════════════════════════════ */}
-      <section className="sec sec-light">
-        <div className="sh">
-          <div className="s-tag">🏆 Student Success</div>
-          <h2 className="s-title">Student Gallery & Certificates</h2>
-          <p className="s-sub">Celebrating our students' achievements — every certificate earned is a dream fulfilled</p>
-        </div>
-        <div className="gallery-filters">
-          {["All","2024","2023"].map(f => (
-            <button key={f} className={`gf-btn ${galleryFilter===f?"on":""}`} onClick={() => setGalleryFilter(f)}>{f === "All" ? "All Students" : `Batch ${f}`}</button>
-          ))}
-        </div>
-        <div className="gallery-grid">
-          {GALLERY.filter(g => galleryFilter === "All" || g.year === galleryFilter).map((g, i) => (
-            <div className="gallery-card" key={i}>
-              <div className="gc-photo" style={{ background:`linear-gradient(135deg,${g.color}22,${g.color}44)` }}>
-                <span style={{ position:"relative", zIndex:1 }}>{g.emoji}</span>
-                <div className="gc-cert-badge">🏆 Certificate Holder</div>
-              </div>
-              <div className="gc-body">
-                <div className="gc-name">{g.name}</div>
-                <div className="gc-course" style={{ color: g.color }}>{g.course}</div>
-                <div style={{ fontSize:".76rem", color:"var(--text-muted)", marginBottom:"10px", lineHeight:1.5 }}>{g.cert}</div>
-                <div className="gc-meta">
-                  <span className="gc-city">📍 {g.city}</span>
-                  <span className="gc-year">{g.year}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══════════════════════════════
-          EVENTS SECTION
-      ══════════════════════════════ */}
-      <section className="sec sec-white">
-        <div className="sh">
-          <div className="s-tag">📅 Our Events</div>
-          <h2 className="s-title">Events & Celebrations</h2>
-          <p className="s-sub">From convocations to workshops — every event is a milestone in our journey together</p>
-        </div>
-        <div className="events-grid">
-          {EVENTS.map((ev, i) => (
-            <div className="event-card" key={i}>
-              <div className="ev-head" style={{ background:`linear-gradient(135deg,${ev.color}22,${ev.color}44)` }}>
-                <span style={{ position:"relative", zIndex:1 }}>{ev.emoji}</span>
-                <div className="ev-type-badge">{ev.type}</div>
-                <div className="ev-date-badge">{ev.date}</div>
-              </div>
-              <div className="ev-body">
-                <div className="ev-title">{ev.title}</div>
-                <div className="ev-desc">{ev.desc}</div>
-                <div className="ev-meta">
-                  <div className="ev-meta-item">👥 <strong>{ev.attendees}</strong> Attended</div>
-                  <div className="ev-meta-item">📍 {ev.location}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══ VALUES ══ */}
-      <section className="sec sec-dark">
-        <div className="sh">
-          <div className="s-tag s-tag-w">💡 Our Values</div>
-          <h2 className="s-title s-title-w">What We Stand For</h2>
-          <p className="s-sub s-sub-w">Every decision guided by these values — putting students first, always</p>
-        </div>
-        <div className="values-grid">
-          {VALUES.map((v,i) => (
-            <div className="v-card" key={i}>
-              <div className="v-icon">{v.icon}</div>
-              <div className="v-title">{v.title}</div>
-              <div className="v-desc">{v.desc}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══ CONTACT ══ */}
-      <section className="sec sec-light" id="contact">
-        <div className="sh">
-          <div className="s-tag">📞 Get in Touch</div>
-          <h2 className="s-title">Contact Us</h2>
-          <p className="s-sub">Have a question? We're always here to help — reach out anytime</p>
-        </div>
-        <div className="contact-grid">
-          <div className="contact-info">
-            {[
-              { icon:"📧", label:"Email Us",     val:<a href="mailto:support@cea.edu">support@cea.edu.in</a> },
-              { icon:"📞", label:"Call Support",  val:<a href="tel:+919999999999">+91 99999 99999</a> },
-              { icon:"📍", label:"Available",     val:<span>Pan India — Online Platform</span> },
-              { icon:"💬", label:"WhatsApp",      val:<a href="#">Chat on WhatsApp</a> },
-              { icon:"▶️", label:"YouTube",       val:<a href="#">Subscribe to our Channel</a> },
-              { icon:"📸", label:"Instagram",     val:<a href="#">Follow @cea.academy</a> },
-            ].map((c,i) => (
-              <div className="ci" key={i}>
-                <div className="ci-icon">{c.icon}</div>
-                <div><div className="ci-label">{c.label}</div><div className="ci-val">{c.val}</div></div>
               </div>
             ))}
           </div>
-          <div className="ch">
-            <div className="ch-title">📅 Support Hours</div>
-            {[
-              {day:"Monday",    time:"10:00 AM – 12:00 PM", open:true },
-              {day:"Tuesday",   time:"10:00 AM – 12:00 PM", open:true },
-              {day:"Wednesday", time:"10:00 AM – 12:00 PM", open:true },
-              {day:"Thursday",  time:"10:00 AM – 12:00 PM", open:true },
-              {day:"Friday",    time:"10:00 AM – 12:00 PM", open:true },
-              {day:"Saturday",  time:"10:00 AM – 12:00 PM", open:true },
-              {day:"Sunday",    time:"Closed",               open:false},
-            ].map((d,i) => (
-              <div className="ch-row" key={i}>
-                <span className="ch-day">{d.day}</span>
-                <span className={`ch-time ${d.open?"open":"closed"}`}>{d.time}</span>
+        </div>
+      </section>
+
+      <section className="legacy-section soft">
+        <div className="container">
+          <div className="row g-4 align-items-center">
+            <div className="col-lg-6">
+              <div className="legacy-head text-start mb-3">
+                <span className="legacy-pill light">Our Mission</span>
+                <h2 className="text-start">Practical Skills, Real Mentorship, Visible Student Growth</h2>
               </div>
-            ))}
-            <div className="ch-pill"><div className="ch-dot" /><span className="ch-pill-text">Currently Open — Call Now!</span></div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══ CTA ══ */}
-      <section className="cta">
-        <h2 className="cta-title">Ready to Start Learning?</h2>
-        <p className="cta-sub">Join 15,000+ students — no fees, no barriers, just pure knowledge. Start today.</p>
-        <div className="cta-btns">
-          <button className="btn-cw" onClick={() => navigate("/course")}>🚀 Enroll Now — It's Free</button>
-          <button className="btn-co" onClick={() => navigate("/home")}>← Back to Home</button>
-        </div>
-      </section>
-
-      {/* ══ FOOTER ══ */}
-      <footer className="footer">
-        <div className="ft-g">
-          <div>
-            <div className="ft-lw">
-              <div className="nav-logo-orb" style={{width:36,height:36,borderRadius:9,fontSize:17}}>💻</div>
-              <span className="ft-ln">Computer Excellence Academy</span>
+              <p className="legacy-mini fs-6 mb-4">
+                We focus on guided learning paths, chapter-wise material, mentor support, and
+                confidence-building practice so every learner can move from basics to employable digital skills.
+              </p>
+              <div className="d-grid gap-3">
+                {[
+                  "Live and recorded concept classes",
+                  "Chapter-wise notes and assignments",
+                  "Support for exam and certification",
+                ].map((point) => (
+                  <div key={point} className="d-flex align-items-center gap-2 about-bullet">
+                    <FiCheckCircle className="text-success" />
+                    <span>{point}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <p className="ft-d">Empowering India's youth with free digital education — from basics to advanced computing, accessible to everyone, everywhere in India.</p>
-            <div className="socs">{["📘","📸","▶️","🐦"].map((s,i)=><a key={i} href="#" className="soc">{s}</a>)}</div>
-          </div>
-          <div>
-            <div className="ft-h">Quick Links</div>
-            <ul className="ft-l">
-              <li><Link to="/">Home</Link></li>
-              <li><Link to="/courses">Courses</Link></li>
-              <li><Link to="/notes">Notes</Link></li>
-              <li><Link to="/aboutus">About Us</Link></li>
-            </ul>
-          </div>
-          <div>
-            <div className="ft-h">Our Courses</div>
-            <ul className="ft-l">
-              {["Basic Computer","English Typing","ADCA Diploma","Web Development","Tally Prime","Graphic Design"].map(c=>(
-                <li key={c}><a href="/course">→ {c}</a></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <div className="ft-h">Contact Us</div>
-            <ul className="ft-l">
-              <li><a href="#">📞 Call: Mon–Sat</a></li>
-              <li><a href="#">⏰ 10AM – 12PM</a></li>
-              <li><a href="#">📧 support@cea.edu</a></li>
-              <li><a href="#">📍 India</a></li>
-            </ul>
+            <div className="col-lg-6">
+              <div className="legacy-card about-highlight-box">
+                <div className="legacy-card-body p-0">
+                  <img
+                    src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1300&q=80"
+                    alt="Students"
+                    className="w-100"
+                    style={{ borderRadius: 20, minHeight: 360, objectFit: "cover" }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="ft-bot">
-          <p>© {new Date().getFullYear()} Computer Excellence Academy. All rights reserved. | Made with ❤️ for learners across India</p>
-        </div>
-      </footer>
+      </section>
 
-      <button className={`scroll-top ${scrollY > 400 ? "show" : ""}`} onClick={() => window.scrollTo({top:0,behavior:"smooth"})}>↑</button>
+      {/* Review Section */}
+      <section className="legacy-section">
+        <div className="container" style={{ maxWidth: 900 }}>
+          <div className="legacy-card shadow-lg p-5 text-center" style={{ borderRadius: 40, background: 'linear-gradient(135deg, #ffffff 0%, #f9f7ff 100%)', border: '1px solid #e9d5ff' }}>
+             <h2 className="fw-bold mb-3">What&apos;s Your CEA Story?</h2>
+             <p className="text-muted mb-5">Your feedback helps thousands of students across India start their digital journey.</p>
+             
+             <form onSubmit={handleReviewSubmit} className="mx-auto" style={{ maxWidth: 600 }}>
+                <div className="mb-4 d-flex justify-content-center gap-3">
+                   {[1,2,3,4,5].map(star => (
+                     <FiStar 
+                        key={star} 
+                        size={32} 
+                        style={{ cursor: 'pointer', color: star <= rating ? '#f59e0b' : '#cbd5e1', fill: star <= rating ? '#f59e0b' : 'none' }}
+                        onClick={() => setRating(star)}
+                     />
+                   ))}
+                </div>
+                <textarea 
+                  className="form-control mb-4 border-0 bg-white shadow-sm p-3" 
+                  rows="3" 
+                  style={{ borderRadius: 20, fontSize: '1.1rem' }}
+                  placeholder="Tell us about your learning experience..."
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  required
+                />
+                <button type="submit" className="legacy-btn primary px-5 py-3" disabled={submitting}>
+                   {submitting ? "Sharing..." : "Post My Review"}
+                </button>
+             </form>
+          </div>
+        </div>
+      </section>
+
+      <section className="legacy-section">
+        <div className="container">
+          <div className="legacy-head">
+            <span className="legacy-pill light">Our Team</span>
+            <h2>Our Mentors</h2>
+            <p>Auto-scrolling mentor showcase with highlighted lead profiles, animated borders, and stronger visual focus.</p>
+          </div>
+          {stripRows(mentors, "mentor-row")}
+        </div>
+      </section>
+
+      <section className="legacy-section soft">
+        <div className="container">
+          <div className="legacy-head">
+            <span className="legacy-pill light">Chief Guests</span>
+            <h2>Esteemed Guests and Academic Leaders</h2>
+            <p>Larger guest cards with clearer roles and description lines so visitors can immediately understand each profile and position.</p>
+          </div>
+          {stripRows(chiefGuests, "guest-row")}
+        </div>
+      </section>
+
+      <section className="legacy-section">
+        <div className="container">
+          <div className="legacy-head">
+            <span className="legacy-pill light">Student Spotlight</span>
+            <h2>Our Learners and Their Growth Journey</h2>
+            <p>Student cards now keep images, names, batch identity, and progress notes clearly visible while maintaining smooth motion.</p>
+          </div>
+          {stripRows(students, "student-row", true)}
+        </div>
+      </section>
+
+      <section className="legacy-section about-events">
+        <div className="container">
+          <div className="legacy-head">
+            <span className="legacy-pill light">Our Events</span>
+            <h2>Workshops, Seminars and Campus Activities</h2>
+            <p>Event memories move automatically to keep the page lively, visual, and engaging without feeling cluttered.</p>
+          </div>
+          {stripRows(events, "event-row")}
+        </div>
+      </section>
+
+      <section
+        style={{
+          background: "linear-gradient(135deg,#7b3ff2 0%,#f21f85 100%)",
+          color: "#fff",
+          textAlign: "center",
+          padding: "60px 0",
+        }}
+      >
+        <div className="container">
+          <h2 style={{ fontFamily: "Playfair Display, serif" }} className="mb-3">
+            Ready to Learn with Us?
+          </h2>
+          <p className="mb-4">Create your account and start learning with free resources.</p>
+          <button className="legacy-btn ghost" onClick={() => navigate("/register")}>
+            Register Now
+          </button>
+        </div>
+      </section>
+
+      <LegacyFooter />
     </div>
   );
 };

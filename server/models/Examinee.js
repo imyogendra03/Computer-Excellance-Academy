@@ -19,12 +19,29 @@ const purchasedBatchSchema = new mongoose.Schema(
     },
     accessStatus: {
       type: String,
-      enum: ["active", "inactive"],
+      enum: ["active", "inactive", "expired", "pending", "rejected"],
       default: "active",
+    },
+    accessType: {
+      type: String,
+      enum: ["paid", "free"],
+      default: "paid",
     },
     enrolledAt: {
       type: Date,
       default: Date.now,
+    },
+    accessStartsAt: {
+      type: Date,
+      default: Date.now,
+    },
+    accessExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    assignedByAdmin: {
+      type: Boolean,
+      default: false,
     },
   },
   { _id: false }
@@ -40,12 +57,14 @@ const examineeSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
+      unique: true,
       trim: true,
       lowercase: true,
     },
     number: {
       type: String,
       required: true,
+      unique: true,
       trim: true,
     },
     address: {
@@ -80,8 +99,26 @@ const examineeSchema = new mongoose.Schema(
       enum: ["active", "inactive", "delete"],
       default: "active",
     },
-
-    // Future-ready fields for course and batch module
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerifyToken: {
+      type: String,
+    },
+    otp: {
+      type: String,
+    },
+    otpExpiry: {
+      type: Date,
+    },
+    otpVerified: {
+      type: Boolean,
+      default: false,
+    },
+    refreshToken: {
+      type: String,
+    },
     purchasedBatches: {
       type: [purchasedBatchSchema],
       default: [],
@@ -90,20 +127,14 @@ const examineeSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    currentSessionId: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
-
-const ExamineeSchema = new mongoose.Schema({
-  name:      { type: String, required: true, trim: true },
-  email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password:  { type: String, required: true },
-  isVerified: { type: Boolean, default: false },
-  emailVerifyToken: { type: String },
-  refreshToken:     { type: String },   // latest refresh token store
-}, { timestamps: true });
-
 
 module.exports = mongoose.model("Examinee", examineeSchema);

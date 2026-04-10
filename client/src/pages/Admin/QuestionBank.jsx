@@ -1,16 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import {
-  FiBookOpen,
-  FiCheckCircle,
-  FiEdit3,
-  FiHelpCircle,
-  FiLayers,
-  FiPlus,
-  FiSearch,
-  FiType,
-  FiX,
-} from "react-icons/fi";
+import { FiCpu, FiEdit3, FiPlus, FiSearch, FiUploadCloud, FiX, FiTrash2 } from "react-icons/fi";
+import { SkeletonTable, SkeletonStats } from "../../components/ui/SkeletonLoader";
+import AppToast from "../../components/ui/AppToast";
+import "../../components/ui/app-ui.css";
 
 const initialForm = {
   question: "",
@@ -22,40 +15,50 @@ const initialForm = {
   subject: "",
 };
 
+const initialImportForm = {
+  subject: "",
+  questionLimit: 10,
+  file: null,
+};
+
+const initialTopicForm = {
+  subject: "",
+  topic: "",
+  questionLimit: 8,
+  difficulty: "medium",
+};
+
 const QuestionBank = () => {
   const [formData, setFormData] = useState(initialForm);
   const [subjects, setSubjects] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState("");
-  const [perPage, setPerPage] = useState(5);
-  const [currentPage, setCurrentPage] = useState(1);
   const [fetching, setFetching] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [toast, setToast] = useState({
-    show: false,
-    message: "",
-    type: "success",
-  });
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
+  const [importForm, setImportForm] = useState(initialImportForm);
+  const [topicForm, setTopicForm] = useState(initialTopicForm);
+  const [generatingTopic, setGeneratingTopic] = useState(false);
 
   const isEditing = Boolean(editingId);
+  const token = localStorage.getItem("adminToken");
+  const authConfig = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(() => {
-      setToast({ show: false, message: "", type: "success" });
-    }, 2500);
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 2600);
   };
 
   const fetchData = async () => {
     try {
       setFetching(true);
       const [questionRes, subjectRes] = await Promise.all([
-        axios.get(`${import.meta.env.VITE_API_URL}/api/question`),
+        axios.get(`${import.meta.env.VITE_API_URL}/api/question`, authConfig),
         axios.get(`${import.meta.env.VITE_API_URL}/api/subject`),
       ]);
-
       setQuestions(questionRes?.data?.data || []);
       setSubjects(subjectRes?.data?.data || []);
     } catch (error) {
@@ -69,756 +72,299 @@ const QuestionBank = () => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, perPage]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const openAddModal = () => {
-    setFormData(initialForm);
-    setEditingId(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (q) => {
-    setFormData({
-      question: q.question || "",
-      optionA: q.optionA || "",
-      optionB: q.optionB || "",
-      optionC: q.optionC || "",
-      optionD: q.optionD || "",
-      correctAnswer: q.correctAnswer || "",
-      subject: q.subject?._id || "",
+  const filteredQuestions = useMemo(() => {
+    const keyword = search.toLowerCase();
+    return questions.filter((question) => {
+      return (
+        question.question?.toLowerCase().includes(keyword) ||
+        question.subject?.subjectname?.toLowerCase().includes(keyword) ||
+        question.sourceType?.toLowerCase().includes(keyword)
+      );
     });
-    setEditingId(q._id);
-    setModalOpen(true);
-  };
+  }, [questions, search]);
+
+  const aiImportedCount = useMemo(
+    () => questions.filter((question) => question.sourceType?.includes("ai")).length,
+    [questions]
+  );
 
   const closeModal = () => {
     setModalOpen(false);
-    setFormData(initialForm);
     setEditingId(null);
+    setFormData(initialForm);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (
-      !formData.question ||
-      !formData.optionA ||
-      !formData.optionB ||
-      !formData.optionC ||
-      !formData.optionD ||
-      !formData.correctAnswer ||
-      !formData.subject
-    ) {
-      showToast("Please fill in all fields", "error");
-      return;
-    }
-
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     try {
       setSaving(true);
-
+      const payload = { ...formData, correctAnswer: formData.correctAnswer.toUpperCase() };
       if (isEditing) {
-        await axios.put(
-          `${import.meta.env.VITE_API_URL}/api/question/${editingId}`,
-          formData
-        );
+        await axios.put(`${import.meta.env.VITE_API_URL}/api/question/${editingId}`, payload, authConfig);
         showToast("Question updated successfully");
       } else {
-        await axios.post(`${import.meta.env.VITE_API_URL}/api/question`, formData);
+        await axios.post(`${import.meta.env.VITE_API_URL}/api/question`, payload, authConfig);
         showToast("Question added successfully");
       }
-
       closeModal();
       fetchData();
     } catch (error) {
-      showToast("Sorry, try again later", "error");
+      showToast(error.response?.data?.message || "Unable to save question", "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this question?"
-    );
-    if (!confirmed) return;
-
+  const handleImportSubmit = async (event) => {
+    event.preventDefault();
+    if (!importForm.subject || !importForm.file) {
+      showToast("Select subject and PDF first", "error");
+      return;
+    }
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/question/${id}`);
-      showToast("Question deleted successfully");
+      setImporting(true);
+      const payload = new FormData();
+      payload.append("subject", importForm.subject);
+      payload.append("questionLimit", String(importForm.questionLimit || 10));
+      payload.append("pdf", importForm.file);
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/question/extract-pdf`, payload, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
+      });
+      setImportForm(initialImportForm);
+      const input = document.getElementById("question-pdf-upload");
+      if (input) input.value = "";
+      showToast(response?.data?.message || "Questions imported successfully");
       fetchData();
     } catch (error) {
-      showToast("Delete failed", "error");
+      showToast(error.response?.data?.message || "PDF import failed", "error");
+    } finally {
+      setImporting(false);
     }
   };
 
-  const filteredQuestions = useMemo(() => {
-    const keyword = search.toLowerCase();
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this question?")) return;
+    try {
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/question/${id}`, authConfig);
+      showToast("Question deleted successfully");
+      fetchData();
+    } catch (error) { showToast("Delete failed", "error"); }
+  };
 
-    return questions.filter((q) => {
-      return (
-        q.question?.toLowerCase().includes(keyword) ||
-        q.optionA?.toLowerCase().includes(keyword) ||
-        q.optionB?.toLowerCase().includes(keyword) ||
-        q.optionC?.toLowerCase().includes(keyword) ||
-        q.optionD?.toLowerCase().includes(keyword) ||
-        q.correctAnswer?.toLowerCase().includes(keyword) ||
-        q.subject?.subjectname?.toLowerCase().includes(keyword)
-      );
-    });
-  }, [questions, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / perPage));
-  const indexOfLast = currentPage * perPage;
-  const indexOfFirst = indexOfLast - perPage;
-  const currentData = filteredQuestions.slice(indexOfFirst, indexOfLast);
+  const handleTopicGenerate = async (event) => {
+    event.preventDefault();
+    if (!topicForm.subject || !topicForm.topic.trim()) {
+      showToast("Select subject and enter topic first", "error");
+      return;
+    }
+    try {
+      setGeneratingTopic(true);
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/question/generate-topic`, topicForm, authConfig);
+      setTopicForm(initialTopicForm);
+      showToast(response?.data?.message || "Questions generated successfully");
+      fetchData();
+    } catch (error) {
+      showToast(error.response?.data?.message || "Topic generation failed", "error");
+    } finally {
+      setGeneratingTopic(false);
+    }
+  };
 
   return (
-    <>
-      <style>{`
-        .qb-page {
-          min-height: 100vh;
-          padding: 24px 0;
-          background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
-        }
+    <div className="app-page">
+      <AppToast toast={toast} onClose={() => setToast({ show: false, message: "", type: "success" })} />
 
-        .qb-hero {
-          padding: 32px;
-          border-radius: 28px;
-          color: #fff;
-          background: linear-gradient(135deg, #0f172a, #1d4ed8, #4f46e5);
-          box-shadow: 0 20px 45px rgba(37, 99, 235, 0.22);
-        }
-
-        .qb-panel,
-        .qb-stat-card,
-        .qb-modal {
-          background: #fff;
-          border-radius: 24px;
-          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-          border: 0;
-        }
-
-        .qb-stat-card {
-          padding: 24px;
-          border-radius: 22px;
-          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-          height: 100%;
-        }
-
-        .qb-input-wrap,
-        .qb-search {
-          position: relative;
-        }
-
-        .qb-input-icon,
-        .qb-search-icon {
-          position: absolute;
-          left: 14px;
-          color: #64748b;
-        }
-
-        .qb-input-icon {
-          top: 50%;
-          transform: translateY(-50%);
-        }
-
-        .qb-input-icon.top {
-          top: 16px;
-          transform: none;
-        }
-
-        .qb-search-icon {
-          top: 50%;
-          transform: translateY(-50%);
-        }
-
-        .qb-input,
-        .qb-textarea,
-        .qb-select {
-          width: 100%;
-          border: 1px solid #dbe3f0;
-          border-radius: 14px;
-          outline: none;
-          transition: 0.2s ease;
-        }
-
-        .qb-input,
-        .qb-select {
-          padding: 12px 14px 12px 40px;
-        }
-
-        .qb-textarea {
-          padding: 12px 14px 12px 40px;
-          resize: none;
-        }
-
-        .qb-input:focus,
-        .qb-textarea:focus,
-        .qb-select:focus {
-          border-color: #7c3aed;
-          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08);
-        }
-
-        .qb-btn-primary {
-          border: none;
-          color: #fff;
-          font-weight: 600;
-          border-radius: 14px;
-          padding: 12px 20px;
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
-        }
-
-        .qb-btn-soft {
-          border-radius: 14px;
-          padding: 12px 20px;
-          font-weight: 600;
-          background: #eef2ff;
-          color: #3730a3;
-          border: 1px solid #c7d2fe;
-        }
-
-        .qb-btn-edit {
-          border: none;
-          color: #fff;
-          border-radius: 10px;
-          padding: 8px 14px;
-          background: linear-gradient(135deg, #0284c7, #2563eb);
-        }
-
-        .qb-btn-delete {
-          border-radius: 10px;
-          padding: 8px 14px;
-          background: #fff1f2;
-          color: #be123c;
-          border: 1px solid #fecdd3;
-        }
-
-        .qb-badge {
-          display: inline-block;
-          padding: 6px 12px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .qb-badge-subject {
-          background: #ede9fe;
-          color: #5b21b6;
-        }
-
-        .qb-badge-answer {
-          background: #dbeafe;
-          color: #1d4ed8;
-        }
-
-        .qb-mobile-card {
-          padding: 16px;
-          background: #fff;
-          border-radius: 18px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-        }
-
-        .qb-toast {
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          z-index: 9999;
-          min-width: 280px;
-          color: #fff;
-          padding: 14px 16px;
-          border-radius: 16px;
-          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .qb-toast.success {
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
-        }
-
-        .qb-toast.error {
-          background: linear-gradient(135deg, #dc2626, #ef4444);
-        }
-
-        .qb-toast-close {
-          border: none;
-          background: transparent;
-          color: #fff;
-          font-size: 16px;
-        }
-
-        .qb-modal-backdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 9998;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-          background: rgba(15, 23, 42, 0.45);
-        }
-
-        .qb-modal {
-          width: 100%;
-          max-width: 760px;
-          overflow: hidden;
-          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
-        }
-
-        .qb-modal-header {
-          padding: 20px 24px;
-          color: #fff;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background: linear-gradient(135deg, #0f172a, #2563eb);
-        }
-
-        .qb-modal-header.edit {
-          background: linear-gradient(135deg, #7c3aed, #4338ca);
-        }
-
-        .qb-modal-close {
-          border: none;
-          background: rgba(255, 255, 255, 0.16);
-          color: #fff;
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
-        }
-
-        @media (max-width: 767px) {
-          .qb-hero {
-            padding: 24px;
-          }
-        }
-      `}</style>
-
-      <div className="qb-page">
-        <div className="container">
-          {toast.show && (
-            <div className={`qb-toast ${toast.type === "error" ? "error" : "success"}`}>
-              <span>{toast.message}</span>
-              <button
-                type="button"
-                className="qb-toast-close"
-                onClick={() => setToast({ show: false, message: "", type: "success" })}
-              >
-                <FiX />
+      <div className="container">
+        <div className="app-hero mb-4">
+          <div className="row align-items-center g-4">
+            <div className="col-lg-8">
+              <h2 className="fw-bold mb-2">Question Bank Intelligence</h2>
+              <p className="mb-0" style={{ opacity: 0.88 }}>
+                Centralized repository for all academic questions. Use manual entry or AI-powered extraction tools.
+              </p>
+            </div>
+            <div className="col-lg-4 text-lg-end">
+              <button type="button" onClick={() => { setFormData(initialForm); setEditingId(null); setModalOpen(true); }} className="app-btn-primary">
+                <FiPlus className="me-2" /> Add Question
               </button>
             </div>
-          )}
-
-          <div className="qb-hero mb-4">
-            <div className="row align-items-center g-4">
-              <div className="col-lg-8">
-                <h2 className="fw-bold mb-2">Question Bank Dashboard</h2>
-                <p className="mb-0" style={{ opacity: 0.88 }}>
-                  Create, search, edit, and manage exam questions in one professional view.
-                </p>
-              </div>
-
-              <div className="col-lg-4 text-lg-end">
-                <button type="button" onClick={openAddModal} className="qb-btn-primary">
-                  <FiPlus className="me-2" />
-                  Add Question
-                </button>
-              </div>
-            </div>
           </div>
+        </div>
 
-          <div className="row g-4 mb-4">
-            <div className="col-md-4">
-              <div className="qb-stat-card">
-                <div className="text-muted mb-2">Total Questions</div>
-                <h4 className="fw-bold mb-0">{questions.length}</h4>
-              </div>
-            </div>
-
-            <div className="col-md-4">
-              <div className="qb-stat-card">
-                <div className="text-muted mb-2">Available Subjects</div>
-                <h4 className="fw-bold mb-0">{subjects.length}</h4>
-              </div>
-            </div>
-
-            <div className="col-md-4">
-              <div className="qb-stat-card">
-                <div className="text-muted mb-2">Visible Records</div>
-                <h4 className="fw-bold mb-0">{filteredQuestions.length}</h4>
-              </div>
-            </div>
-          </div>
-
-          <div className="qb-panel">
-            <div className="card-body p-4">
-              <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-                <div>
-                  <h4 className="fw-bold mb-1">Question Records</h4>
-                  <p className="text-muted mb-0">
-                    Search, paginate, edit and manage all questions.
-                  </p>
-                </div>
-
-                <div className="d-flex flex-wrap gap-2">
-                  <div className="qb-search">
-                    <FiSearch className="qb-search-icon" />
-                    <input
-                      type="text"
-                      className="qb-input"
-                      placeholder="Search questions..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      style={{ minWidth: 230 }}
-                    />
-                  </div>
-
-                  <select
-                    className="qb-select"
-                    value={perPage}
-                    onChange={(e) => setPerPage(Number(e.target.value))}
-                    style={{ minWidth: 130, paddingLeft: 14 }}
-                  >
-                    <option value={5}>5 / page</option>
-                    <option value={10}>10 / page</option>
-                    <option value={20}>20 / page</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="d-none d-md-block table-responsive">
-                <table className="table align-middle">
-                  <thead>
-                    <tr style={{ color: "#475569" }}>
-                      <th>#</th>
-                      <th>Question</th>
-                      <th>Subject</th>
-                      <th>A</th>
-                      <th>B</th>
-                      <th>C</th>
-                      <th>D</th>
-                      <th>Correct</th>
-                      <th className="text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fetching ? (
-                      <tr>
-                        <td colSpan="9" className="text-center py-5">
-                          Loading questions...
-                        </td>
-                      </tr>
-                    ) : currentData.length === 0 ? (
-                      <tr>
-                        <td colSpan="9" className="text-center py-5 text-muted">
-                          No matching records found.
-                        </td>
-                      </tr>
-                    ) : (
-                      currentData.map((q, index) => (
-                        <tr key={q._id}>
-                          <td>{indexOfFirst + index + 1}</td>
-                          <td style={{ minWidth: 220 }}>{q.question}</td>
-                          <td>
-                            <span className="qb-badge qb-badge-subject">
-                              {q.subject?.subjectname || "No Subject"}
-                            </span>
-                          </td>
-                          <td>{q.optionA}</td>
-                          <td>{q.optionB}</td>
-                          <td>{q.optionC}</td>
-                          <td>{q.optionD}</td>
-                          <td>
-                            <span className="qb-badge qb-badge-answer">
-                              {q.correctAnswer}
-                            </span>
-                          </td>
-                          <td className="text-center">
-                            <button
-                              type="button"
-                              className="qb-btn-edit me-2"
-                              onClick={() => handleEdit(q)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="qb-btn-delete"
-                              onClick={() => handleDelete(q._id)}
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="d-block d-md-none">
-                {fetching ? (
-                  <div className="text-center py-4">Loading questions...</div>
-                ) : currentData.length === 0 ? (
-                  <div className="text-center py-4 text-muted">
-                    No matching records found.
-                  </div>
-                ) : (
-                  <div className="row g-3">
-                    {currentData.map((q, index) => (
-                      <div className="col-12" key={q._id}>
-                        <div className="qb-mobile-card">
-                          <div className="d-flex justify-content-between align-items-start mb-2">
-                            <strong>#{indexOfFirst + index + 1}</strong>
-                            <span className="qb-badge qb-badge-subject">
-                              {q.subject?.subjectname || "No Subject"}
-                            </span>
-                          </div>
-
-                          <div className="fw-semibold mb-2">{q.question}</div>
-                          <div className="text-muted small mb-1">A: {q.optionA}</div>
-                          <div className="text-muted small mb-1">B: {q.optionB}</div>
-                          <div className="text-muted small mb-1">C: {q.optionC}</div>
-                          <div className="text-muted small mb-2">D: {q.optionD}</div>
-
-                          <div className="mb-3">
-                            <span className="qb-badge qb-badge-answer">
-                              Correct: {q.correctAnswer}
-                            </span>
-                          </div>
-
-                          <div className="d-flex gap-2">
-                            <button
-                              type="button"
-                              className="qb-btn-edit w-50"
-                              onClick={() => handleEdit(q)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="qb-btn-delete w-50"
-                              onClick={() => handleDelete(q._id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="d-flex flex-wrap justify-content-between align-items-center mt-4 gap-3">
-                <div className="text-muted">
-                  Page {currentPage} of {totalPages}
-                </div>
-
-                <div className="d-flex gap-2">
-                  <button
-                    type="button"
-                    className="qb-btn-soft"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((prev) => prev - 1)}
-                  >
-                    Previous
-                  </button>
-
-                  <button
-                    type="button"
-                    className="qb-btn-primary"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((prev) => prev + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {modalOpen && (
-            <div className="qb-modal-backdrop">
-              <div className="qb-modal">
-                <div className={`qb-modal-header ${isEditing ? "edit" : ""}`}>
-                  <div>
-                    <h4 className="fw-bold mb-1">
-                      {isEditing ? "Edit Question" : "Add New Question"}
-                    </h4>
-                    <p className="mb-0" style={{ opacity: 0.8 }}>
-                      Fill all question details before saving.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="qb-modal-close"
-                    onClick={closeModal}
-                  >
-                    <FiX />
-                  </button>
-                </div>
-
-                <div className="p-4">
-                  <form onSubmit={handleSubmit}>
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">Question</label>
-                      <div className="qb-input-wrap">
-                        <FiHelpCircle className="qb-input-icon top" />
-                        <textarea
-                          name="question"
-                          value={formData.question}
-                          onChange={handleChange}
-                          rows="4"
-                          className="qb-textarea"
-                          placeholder="Enter question here"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="row g-3 mb-3">
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">Option A</label>
-                        <div className="qb-input-wrap">
-                          <FiType className="qb-input-icon" />
-                          <input
-                            type="text"
-                            name="optionA"
-                            value={formData.optionA}
-                            onChange={handleChange}
-                            className="qb-input"
-                            placeholder="Option A"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">Option B</label>
-                        <div className="qb-input-wrap">
-                          <FiType className="qb-input-icon" />
-                          <input
-                            type="text"
-                            name="optionB"
-                            value={formData.optionB}
-                            onChange={handleChange}
-                            className="qb-input"
-                            placeholder="Option B"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">Option C</label>
-                        <div className="qb-input-wrap">
-                          <FiType className="qb-input-icon" />
-                          <input
-                            type="text"
-                            name="optionC"
-                            value={formData.optionC}
-                            onChange={handleChange}
-                            className="qb-input"
-                            placeholder="Option C"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">Option D</label>
-                        <div className="qb-input-wrap">
-                          <FiType className="qb-input-icon" />
-                          <input
-                            type="text"
-                            name="optionD"
-                            value={formData.optionD}
-                            onChange={handleChange}
-                            className="qb-input"
-                            placeholder="Option D"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="row g-3 mb-4">
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">
-                          Correct Answer
-                        </label>
-                        <div className="qb-input-wrap">
-                          <FiCheckCircle className="qb-input-icon" />
-                          <input
-                            type="text"
-                            name="correctAnswer"
-                            value={formData.correctAnswer}
-                            onChange={handleChange}
-                            className="qb-input"
-                            placeholder="Correct option"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">Subject</label>
-                        <div className="qb-input-wrap">
-                          <FiBookOpen className="qb-input-icon" />
-                          <select
-                            name="subject"
-                            value={formData.subject}
-                            onChange={handleChange}
-                            className="qb-select"
-                          >
-                            <option value="">Select Subject</option>
-                            {subjects.map((sub) => (
-                              <option key={sub._id} value={sub._id}>
-                                {sub.subjectname}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="d-flex flex-wrap gap-2">
-                      <button
-                        type="submit"
-                        className="qb-btn-primary"
-                        disabled={saving}
-                      >
-                        {saving
-                          ? "Saving..."
-                          : isEditing
-                          ? "Update Question"
-                          : "Add Question"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="qb-btn-soft"
-                        onClick={closeModal}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
+        <div className="row g-4 mb-4">
+          {fetching ? (
+            <SkeletonStats count={3} />
+          ) : (
+            <>
+              <div className="col-md-4"><div className="app-stat-card"><div className="app-label-muted">Total Bank Size</div><h4 className="fw-bold mb-0">{questions.length}</h4></div></div>
+              <div className="col-md-4"><div className="app-stat-card"><div className="app-label-muted">AI Generated</div><h4 className="fw-bold mb-0">{aiImportedCount}</h4></div></div>
+              <div className="col-md-4"><div className="app-stat-card"><div className="app-label-muted">Subject Coverage</div><h4 className="fw-bold mb-0">{subjects.length}</h4></div></div>
+            </>
           )}
         </div>
+
+        <div style={{ borderRadius: 16, background: "linear-gradient(135deg, #0f172a, #1d4ed8, #22c55e)", color: '#fff', padding: 40, marginBottom: 32, boxShadow: "0 18px 42px rgba(15,23,42,0.16)" }}>
+          <div className="row g-4">
+            <div className="col-lg-4">
+              <div className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill mb-3" style={{ background: "rgba(255,255,255,0.15)" }}><FiCpu /><span className="small fw-bold">Gemini AI Studio</span></div>
+              <h3 className="fw-bold mb-3">Rapid content extraction & generation</h3>
+              <p style={{ opacity: 0.75 }}>Upload your curriculum PDF or specify a topic to instantly populate your question bank with high-quality MCQs.</p>
+            </div>
+            <div className="col-lg-4">
+              <div style={{ background: "rgba(255, 255, 255, 0.1)", backdropFilter: "blur(12px)", border: "1px solid rgba(255, 255, 255, 0.2)", borderRadius: 16, padding: 24, transition: "0.3s" }}>
+                <h6 className="fw-bold mb-3"><FiUploadCloud className="me-2" style={{ display: 'inline' }} />PDF Extraction</h6>
+                <form onSubmit={handleImportSubmit}>
+                  <div className="app-input-wrap mb-2">
+                    <select className="form-select app-input" value={importForm.subject} onChange={(e) => setImportForm(p => ({ ...p, subject: e.target.value }))}><option value="">Select Subject</option>{subjects.map(s => <option key={s._id} value={s._id}>{s.subjectname}</option>)}</select>
+                  </div>
+                  <div className="app-input-wrap mb-2">
+                    <input type="number" className="form-control app-input" placeholder="Max Questions" value={importForm.questionLimit} onChange={(e) => setImportForm(p => ({ ...p, questionLimit: e.target.value }))} />
+                  </div>
+                  <div className="app-input-wrap mb-3">
+                    <input type="file" id="question-pdf-upload" accept="application/pdf" className="form-control app-input" onChange={(e) => setImportForm(p => ({ ...p, file: e.target.files?.[0] || null }))} />
+                  </div>
+                  <button type="submit" className="app-btn-primary w-100" disabled={importing}>{importing ? "Processing..." : "Import PDF"}</button>
+                </form>
+              </div>
+            </div>
+            <div className="col-lg-4">
+              <div style={{ background: "rgba(255, 255, 255, 0.1)", backdropFilter: "blur(12px)", border: "1px solid rgba(255, 255, 255, 0.2)", borderRadius: 16, padding: 24, transition: "0.3s" }}>
+                <h6 className="fw-bold mb-3"><FiCpu className="me-2" style={{ display: 'inline' }} />Topic Generator</h6>
+                <form onSubmit={handleTopicGenerate}>
+                  <div className="app-input-wrap mb-2">
+                    <select className="form-select app-input" value={topicForm.subject} onChange={(e) => setTopicForm(p => ({ ...p, subject: e.target.value }))}><option value="">Select Subject</option>{subjects.map(s => <option key={s._id} value={s._id}>{s.subjectname}</option>)}</select>
+                  </div>
+                  <div className="app-input-wrap mb-2">
+                    <input className="form-control app-input" placeholder="Enter topic (e.g. Loops in C)" value={topicForm.topic} onChange={(e) => setTopicForm(p => ({ ...p, topic: e.target.value }))} />
+                  </div>
+                  <div className="row g-2 mb-3">
+                    <div className="col-6"><div className="app-input-wrap"><input type="number" className="form-control app-input" value={topicForm.questionLimit} onChange={(e) => setTopicForm(p => ({ ...p, questionLimit: e.target.value }))} /></div></div>
+                    <div className="col-6"><div className="app-input-wrap"><select className="form-select app-input" value={topicForm.difficulty} onChange={(e) => setTopicForm(p => ({ ...p, difficulty: e.target.value }))}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></div></div>
+                  </div>
+                  <button type="submit" className="app-btn-primary w-100" disabled={generatingTopic}>{generatingTopic ? "Generating..." : "Generate MCQs"}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="app-panel">
+          <div className="card-body p-4">
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+              <div><h4 className="fw-bold mb-1">Question Inventory</h4><p className="text-muted small">Search and manage your academic content effectively.</p></div>
+              <div className="app-search" style={{ minWidth: 320 }}>
+                <FiSearch className="app-search__icon" />
+                <input type="text" className="form-control app-input" placeholder="Filter by question, subject..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="table-responsive d-none d-md-block">
+              <table className="table align-middle">
+                <thead><tr style={{ color: "#475569" }}><th>#</th><th>QUESTION</th><th>SUBJECT</th><th>SOURCE</th><th className="text-end">ACTION</th></tr></thead>
+                <tbody>
+                  {fetching ? (
+                    <tr><td colSpan="5" className="p-0 border-0"><SkeletonTable rows={5} cols={5} /></td></tr>
+                  ) : filteredQuestions.length === 0 ? (
+                    <tr><td colSpan="5" className="text-center py-5 text-muted">No questions found matching your search.</td></tr>
+                  ) : (
+                    filteredQuestions.map((q, i) => (
+                      <tr key={q._id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td className="fw-bold text-muted small">{i + 1}</td>
+                        <td style={{ minWidth: 280 }}>
+                          <div className="fw-bold text-dark mb-1">{q.question}</div>
+                          <div className="d-flex flex-wrap gap-2 small text-muted"><span className={q.correctAnswer === 'A' ? 'text-primary fw-bold' : ''}>A: {q.optionA}</span><span className={q.correctAnswer === 'B' ? 'text-primary fw-bold' : ''}>B: {q.optionB}</span></div>
+                        </td>
+                        <td className="fw-bold text-muted">{q.subject?.subjectname || "General"}</td>
+                        <td><span className="app-badge" style={{ background: q.sourceType?.includes('ai') ? '#fee2e2' : '#dbeafe', color: q.sourceType?.includes('ai') ? '#991b1b' : '#1e40af' }}>{q.sourceType || 'Manual'}</span></td>
+                        <td className="text-end">
+                          <div className="d-flex justify-content-end gap-2">
+                            <button className="app-btn-edit" onClick={() => { setFormData({ question: q.question, optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD, correctAnswer: q.correctAnswer, subject: q.subject?._id }); setEditingId(q._id); setModalOpen(true); }}><FiEdit3 /></button>
+                            <button className="app-btn-delete" onClick={() => handleDelete(q._id)}><FiTrash2 /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="d-block d-md-none">
+              {fetching ? (
+                <div className="text-center py-4">Loading questions...</div>
+              ) : filteredQuestions.length === 0 ? (
+                <div className="text-center py-4 text-muted">No questions found.</div>
+              ) : (
+                <div className="row g-3">
+                  {filteredQuestions.map((q, i) => (
+                    <div className="col-12" key={q._id || i}>
+                      <div className="app-mobile-card">
+                        <strong>#{i + 1} - {q.question.substring(0, 40)}...</strong>
+                        <div className="text-muted small mt-1">{q.subject?.subjectname || "General"}</div>
+                        <div className="d-flex justify-content-between align-items-center mt-2">
+                          <span className="app-badge" style={{ background: q.sourceType?.includes('ai') ? '#fee2e2' : '#dbeafe', color: q.sourceType?.includes('ai') ? '#991b1b' : '#1e40af' }}>{q.sourceType || 'Manual'}</span>
+                          <div className="d-flex gap-2">
+                            <button className="app-btn-edit" onClick={() => { setFormData({ question: q.question, optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD, correctAnswer: q.correctAnswer, subject: q.subject?._id }); setEditingId(q._id); setModalOpen(true); }}><FiEdit3 /></button>
+                            <button className="app-btn-delete" onClick={() => handleDelete(q._id)}><FiTrash2 /></button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </>
+
+      {modalOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", backdropFilter: 'blur(8px)', display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: 20 }}>
+          <div className="app-panel" style={{ width: "100%", maxWidth: 800, padding: 0, overflow: "hidden" }}>
+            <div className="d-flex justify-content-between align-items-center p-4" style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <h4 className="fw-bold mb-0">{isEditing ? "Edit Question" : "New Question Entry"}</h4>
+              <button type="button" onClick={closeModal} className="btn-close"></button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-4">
+              <div className="mb-4">
+                <label className="form-label fw-bold small text-uppercase">Question Content</label>
+                <div className="app-input-wrap">
+                  <textarea className="form-control app-textarea" rows="3" value={formData.question} onChange={(e) => setFormData(p => ({ ...p, question: e.target.value }))} required />
+                </div>
+              </div>
+              <div className="row g-3 mb-4">
+                {['A','B','C','D'].map(opt => (
+                  <div className="col-md-6" key={opt}>
+                    <label className="form-label fw-bold small text-uppercase">Option {opt}</label>
+                    <div className="app-input-wrap">
+                      <input className="form-control app-input" value={formData[`option${opt}`]} onChange={(e) => setFormData(p => ({ ...p, [`option${opt}`]: e.target.value }))} required />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="row g-3 mb-4">
+                <div className="col-md-6">
+                  <label className="form-label fw-bold small text-uppercase">Correct Choice</label>
+                  <div className="app-input-wrap">
+                    <select className="form-select app-input" value={formData.correctAnswer} onChange={(e) => setFormData(p => ({ ...p, correctAnswer: e.target.value }))} required><option value="">Select Option</option><option value="A">Choice A</option><option value="B">Choice B</option><option value="C">Choice C</option><option value="D">Choice D</option></select>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label fw-bold small text-uppercase">Subject</label>
+                  <div className="app-input-wrap">
+                    <select className="form-select app-input" value={formData.subject} onChange={(e) => setFormData(p => ({ ...p, subject: e.target.value }))} required><option value="">Assign Subject</option>{subjects.map(s => <option key={s._id} value={s._id}>{s.subjectname}</option>)}</select>
+                  </div>
+                </div>
+              </div>
+              <div className="d-flex gap-3">
+                <button type="submit" className="app-btn-primary flex-grow-1" disabled={saving}>{saving ? "Saving..." : isEditing ? "Save Changes" : "Create Question"}</button>
+                <button type="button" onClick={closeModal} className="app-btn-soft">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

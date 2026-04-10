@@ -1,136 +1,77 @@
 const express = require("express");
 const router = express.Router();
 const Note = require("../models/Note");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const Content = require("../models/Content");
+const Batch = require("../models/Batch");
 
-// PDF upload setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = "uploads/notes";
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `note_${Date.now()}${path.extname(file.originalname)}`);
-  },
-});
-
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === "application/pdf") {
-      cb(null, true);
-    } else {
-      cb(new Error("Only PDF files allowed"), false);
-    }
-  },
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
-
-// Upload PDF
-router.post("/upload-pdf", (req, res) => {
-  upload.single("pdf")(req, res, (err) => {
-    if (err) {
-      console.error("Multer error:", err);
-      return res.status(400).json({ message: err.message || "Upload failed" });
-    }
-    if (!req.file) {
-      return res.status(400).json({ message: "No PDF file uploaded" });
-    }
-    const fileUrl = `${process.env.BACKEND_URL}/uploads/notes/${req.file.filename}`;
-    console.log("PDF uploaded:", fileUrl);
-    return res.status(200).json({ success: true, fileUrl });
-  });
-});
-
-// Create note
-router.post("/", async (req, res) => {
+// Public Notes Endpoint - Simplified for Reliability
+router.get("/public", async (req, res) => {
   try {
-    const note = new Note(req.body);
-    await note.save();
-    return res.status(201).json({ success: true, data: note });
-  } catch (error) {
-    console.error("Create note error:", error);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
+    const { courseId, subject } = req.query;
+    console.log("[LOG] Notes Public Request:", { courseId, subject });
 
-// Get all notes (admin)
-router.get("/", async (req, res) => {
-  try {
-    const { courseId, type, subject } = req.query;
-    const filter = {};
-    if (courseId) filter.course = courseId;
-    if (type) filter.type = type;
-    if (subject) filter.subject = subject;
-
-    const notes = await Note.find(filter)
-      .populate("course")
-      .sort({ order: 1, createdAt: -1 });
-
-    return res.json({ success: true, data: notes });
-  } catch (error) {
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Get notes for user
-router.get("/user", async (req, res) => {
-  try {
-    const { courseId, type, subject } = req.query;
-    const filter = { isPublished: true, status: "active" };
-    if (courseId) filter.course = courseId;
-    if (type) filter.type = type;
-    if (subject) filter.subject = subject;
-
-    const notes = await Note.find(filter)
-      .populate("course")
-      .sort({ order: 1, createdAt: -1 });
-
-    return res.json({ success: true, data: notes });
-  } catch (error) {
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Get single note
-router.get("/:id", async (req, res) => {
-  try {
-    const note = await Note.findById(req.params.id).populate("course");
-    if (!note) return res.status(404).json({ message: "Note not found" });
-    return res.json({ success: true, data: note });
-  } catch (error) {
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Update note
-router.put("/:id", async (req, res) => {
-  try {
-    const note = await Note.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!note) return res.status(404).json({ message: "Note not found" });
-    return res.json({ success: true, data: note });
-  } catch (error) {
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Delete note
-router.delete("/:id", async (req, res) => {
-  try {
-    const note = await Note.findByIdAndDelete(req.params.id);
-    if (!note) return res.status(404).json({ message: "Note not found" });
-
-    if (note.fileUrl) {
-      const filePath = note.fileUrl.replace(`${process.env.BACKEND_URL}/`, "");
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // 1. Determine which batches we should look into
+    let batchIds = [];
+    if (courseId && courseId !== "all" && courseId !== "undefined") {
+      const batches = await Batch.find({ course: courseId }).distinct("_id");
+      batchIds = batches;
     }
 
-    return res.json({ success: true, message: "Note deleted" });
-  } catch (error) {
-    return res.status(500).json({ message: "Server error" });
+    // 2. Build Queries
+    const standaloneFilter = { status: "active", isPublished: true };
+    if (courseId && courseId !== "all" && courseId !== "undefined") {
+      standaloneFilter.course = courseId;
+    }
+
+    const contentFilter = { resourceFormat: "pdf" };
+    if (batchIds.length > 0) {
+      contentFilter.batchId = { $in: batchIds };
+    } else if (courseId && courseId !== "all" && courseId !== "undefined") {
+      // If course selected but no batches found, return nothing for batch content
+      contentFilter.batchId = { $in: [] };
+    }
+
+    // 3. Parallel Fetching
+    const [sc, bc] = await Promise.all([
+      Note.find(standaloneFilter).populate("course", "title").lean(),
+      Content.find(contentFilter)
+        .populate("batchId", "batchName")
+        .populate("subjectId", "title subjectname")
+        .lean()
+    ]);
+
+    // 4. Transform Batch Content (Mirroring NotesTab logic)
+    const normalizedBatch = bc.map(n => ({
+      _id: n._id,
+      title: n.title,
+      description: n.description || "Study material from batch.",
+      subject: n.subjectId?.title || n.subjectId?.subjectname || "General",
+      fileUrl: n.url,
+      type: "free",
+      category: (n.type || "PDF").toUpperCase(),
+      course: { title: n.batchId?.batchName || "Batch Content" },
+      createdAt: n.createdAt
+    }));
+
+    // 5. Merge and Subject Filter
+    let merged = [...sc, ...normalizedBatch];
+
+    if (subject && subject !== "undefined" && subject !== "") {
+      const term = subject.toLowerCase().trim();
+      merged = merged.filter(item => 
+        (item.subject && String(item.subject).toLowerCase().includes(term)) ||
+        (item.title && String(item.title).toLowerCase().includes(term))
+      );
+    }
+
+    // 6. Final Sort
+    merged.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    console.log("[LOG] Sending", merged.length, "notes to client");
+    return res.json({ success: true, count: merged.length, data: merged });
+  } catch (err) {
+    console.error("[ERROR] Public Notes Route Error:", err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 

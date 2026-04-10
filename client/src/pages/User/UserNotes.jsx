@@ -1,16 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { SkeletonCard } from "../../components/ui/SkeletonLoader";
+import AppToast from "../../components/ui/AppToast";
+import "../../components/ui/app-ui.css";
+import { FiDownload, FiSearch } from "react-icons/fi";
 
 const UserNotes = () => {
   const userId = localStorage.getItem("userId");
+  const token = localStorage.getItem("token");
+  const [search, setSearch] = useState("");
+  const [filterCourse, setFilterCourse] = useState("");
+  const [filterSubject, setFilterSubject] = useState("");
   const [notes, setNotes] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterCourse, setFilterCourse] = useState("");
-  const [filterType, setFilterType] = useState("");
-  const [filterSubject, setFilterSubject] = useState("");
+  const [purchasedBatches, setPurchasedBatches] = useState([]);
   const [previewNote, setPreviewNote] = useState(null);
-  const [purchasedCourseIds, setPurchasedCourseIds] = useState([]);
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   const showToast = (message, type = "error") => {
@@ -18,370 +24,313 @@ const UserNotes = () => {
     setTimeout(() => setToast({ show: false, message: "", type: "success" }), 2500);
   };
 
-  const fetchPurchasedBatches = async () => {
-    try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/examinee/${userId}/my-batches`);
-      const batches = res?.data?.data || [];
-      const courseIds = batches.map((b) => String(b.course?._id || b.course));
-      setPurchasedCourseIds(courseIds);
-    } catch {}
-  };
+  // Fetch user's purchased batches (batch access verification)
+  useEffect(() => {
+    const fetchPurchasedBatches = async () => {
+      try {
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_URL}/api/examinee/${userId}/my-batches`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        // Filter only active/purchased batches
+        const activeBatches = (res.data?.data || []).filter(
+          (b) => b.accessStatus === "active" || b.paymentStatus === "completed"
+        );
+        setPurchasedBatches(activeBatches);
+        
+        // Extract courseIds from purchased batches
+        const courseIds = activeBatches.map((b) => b.courseId || b.course?._id).filter(Boolean);
+        setFilterCourse(courseIds[0] || "");
+      } catch (err) {
+        showToast("Unable to fetch your batch access", "error");
+        setPurchasedBatches([]);
+      }
+    };
 
-  const fetchCourses = async () => {
-    try {
-      const res = await axios.get("${import.meta.env.VITE_API_URL}/api/course");
-      setCourses(res.data?.data || []);
-    } catch {}
-  };
-
-  const fetchNotes = async () => {
-    try {
-      setLoading(true);
-      let url = "${import.meta.env.VITE_API_URL}/api/notes/user?";
-      if (filterCourse) url += `courseId=${filterCourse}&`;
-      if (filterType) url += `type=${filterType}&`;
-      if (filterSubject) url += `subject=${filterSubject}`;
-      const res = await axios.get(url);
-      setNotes(res.data?.data || []);
-    } catch {
-      showToast("Notes load nahi ho paaye", "error");
-    } finally {
-      setLoading(false);
+    if (userId && token) {
+      fetchPurchasedBatches();
     }
-  };
+  }, [userId, token]);
 
+  // Fetch subjects based on course
   useEffect(() => {
-    fetchCourses();
-    fetchPurchasedBatches();
-  }, []);
+    const fetchSubjects = async () => {
+      try {
+        let url = `${import.meta.env.VITE_API_URL}/api/subject`;
+        if (filterCourse) {
+          url += `?courseId=${filterCourse}`;
+        }
+        
+        const res = await axios.get(url);
+        if (Array.isArray(res.data?.data)) {
+          const names = [...new Set(res.data.data.map(s => s.subjectname || s.title).filter(Boolean))];
+          setSubjects(names);
+        }
+      } catch {
+        setSubjects([]);
+      }
+    };
+    fetchSubjects();
+  }, [filterCourse]);
 
+  // Fetch courses (only purchased courses)
   useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/course`);
+        const allCourses = Array.isArray(res.data?.data) ? res.data.data : [];
+        
+        // Filter to show only purchased courses
+        const courseIds = purchasedBatches.map((b) => b.courseId || b.course?._id).filter(Boolean);
+        const filtered = allCourses.filter((c) => courseIds.includes(c._id));
+        setCourses(filtered);
+      } catch {
+        setCourses([]);
+      }
+    };
+    
+    if (purchasedBatches.length > 0) {
+      fetchCourses();
+    }
+  }, [purchasedBatches]);
+
+  // Fetch notes from public endpoint - only for purchased batches
+  useEffect(() => {
+    const fetchNotes = async () => {
+      try {
+        setLoading(true);
+        
+        // Only fetch if user has purchased batches
+        if (purchasedBatches.length === 0) {
+          setNotes([]);
+          setLoading(false);
+          return;
+        }
+
+        const params = new URLSearchParams();
+        if (filterCourse) {
+          params.append("courseId", filterCourse);
+        }
+        if (filterSubject) {
+          params.append("subject", filterSubject);
+        }
+        
+        const apiUrl = `${import.meta.env.VITE_API_URL}/api/notes/public?${params.toString()}`;
+        const res = await axios.get(apiUrl);
+        setNotes(Array.isArray(res.data?.data) ? res.data.data : []);
+      } catch (err) {
+        if (err.response?.status !== 404) {
+          showToast("Notes load nahi ho paaye", "error");
+        }
+        setNotes([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     fetchNotes();
-  }, [filterCourse, filterType, filterSubject]);
+  }, [filterCourse, filterSubject, purchasedBatches]);
 
-  const hasAccess = (note) => {
-    if (note.type === "free") return true;
-    return purchasedCourseIds.includes(String(note.course?._id || note.course));
-  };
+  // Filter notes based on search
+  const filtered = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    return notes.filter((note) => {
+      const title = String(note.title || "").toLowerCase();
+      const subject = String(note.subject || "").toLowerCase();
+      return !query || title.includes(query) || subject.includes(query);
+    });
+  }, [notes, search]);
 
-  const subjects = [...new Set(notes.map((n) => n.subject).filter(Boolean))];
+  // PDF icon for UI
+  const PdfIcon = ({ size = 20, className = "" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 90 90" aria-hidden="true" className={className}>
+      <path d="M 78.806 62.716 V 20.496 c 0 -1.214 -0.473 -2.356 -1.332 -3.216 L 61.526 1.332 C 60.667 0.473 59.525 0 58.31 0 H 15.742 c -2.508 0 -4.548 2.04 -4.548 4.548 V 43.16 v 19.556 C 34.114 65.376 56.665 65.47 78.806 62.716 z" fill="rgb(220,223,225)" />
+      <path d="M 11.194 62.716 v 11.23 v 11.506 c 0 2.508 2.04 4.548 4.548 4.548 h 58.517 c 2.508 0 4.548 -2.04 4.548 -4.548 V 62.716 H 11.194 z" fill="rgb(234,84,64)" />
+      <polygon points="60.27,18.41 78.81,36.88 78.73,19.73" fill="rgb(196,203,210)" />
+      <path d="M 77.474 17.28 L 61.526 1.332 c -0.675 -0.676 -1.529 -1.102 -2.453 -1.258 v 15.382 c 0 2.358 1.919 4.277 4.277 4.277 h 15.382 C 78.576 18.81 78.15 17.956 77.474 17.28 z" fill="rgb(171,178,184)" />
+      <path d="M 33.092 68.321 h -4.374 c -0.69 0 -1.25 0.56 -1.25 1.25 v 8.091 v 5.541 c 0 0.69 0.56 1.25 1.25 1.25 s 1.25 -0.56 1.25 -1.25 v -4.291 h 3.124 c 2.254 0 4.088 -1.834 4.088 -4.088 v -2.415 C 37.18 70.155 35.346 68.321 33.092 68.321 z M 34.68 74.824 c 0 0.876 -0.712 1.588 -1.588 1.588 h -3.124 v -5.591 h 3.124 c 0.876 0 1.588 0.712 1.588 1.588 V 74.824 z" fill="rgb(255,255,255)" />
+      <path d="M 45.351 84.453 H 41.27 c -0.69 0 -1.25 -0.56 -1.25 -1.25 V 69.571 c 0 -0.69 0.56 -1.25 1.25 -1.25 h 4.082 c 2.416 0 4.38 1.965 4.38 4.38 v 7.371 C 49.731 82.488 47.767 84.453 45.351 84.453 z M 42.52 81.953 h 2.832 c 1.037 0 1.88 -0.844 1.88 -1.881 v -7.371 c 0 -1.036 -0.844 -1.88 -1.88 -1.88 H 42.52 V 81.953 z" fill="rgb(255,255,255)" />
+      <path d="M 61.282 68.321 H 54.07 c -0.69 0 -1.25 0.56 -1.25 1.25 v 13.632 c 0 0.69 0.56 1.25 1.25 1.25 s 1.25 -0.56 1.25 -1.25 v -5.566 h 3.473 c 0.69 0 1.25 -0.56 1.25 -1.25 s -0.56 -1.25 -1.25 -1.25 H 55.32 v -4.315 h 5.962 c 0.69 0 1.25 -0.56 1.25 -1.25 S 61.973 68.321 61.282 68.321 z" fill="rgb(255,255,255)" />
+      <path d="M 60.137 40.012 c -0.154 -0.374 -0.52 -0.617 -0.924 -0.617 h -4.805 V 27.616 c 0 -0.552 -0.447 -1 -1 -1 H 40.592 c -0.552 0 -1 0.448 -1 1 v 11.778 h -4.805 c -0.404 0 -0.769 0.244 -0.924 0.617 c -0.155 0.374 -0.069 0.804 0.217 1.09 l 12.213 12.213 c 0.195 0.195 0.451 0.293 0.707 0.293 s 0.512 -0.098 0.707 -0.293 L 59.92 41.102 C 60.206 40.815 60.292 40.386 60.137 40.012 z" fill="rgb(196,203,210)" />
+      <path d="M 58.137 38.012 c -0.154 -0.374 -0.52 -0.617 -0.924 -0.617 h -4.805 V 25.616 c 0 -0.552 -0.447 -1 -1 -1 H 38.592 c -0.552 0 -1 0.448 -1 1 v 11.778 h -4.805 c -0.404 0 -0.769 0.244 -0.924 0.617 c -0.155 0.374 -0.069 0.804 0.217 1.09 l 12.213 12.213 c 0.195 0.195 0.451 0.293 0.707 0.293 s 0.512 -0.098 0.707 -0.293 L 57.92 39.102 C 58.206 38.815 58.292 38.386 58.137 38.012 z" fill="rgb(234,84,64)" />
+    </svg>
+  );
 
-  const grouped = notes.reduce((acc, note) => {
-    const key = note.chapter || "General";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(note);
-    return acc;
-  }, {});
-
-  const getYoutubeEmbed = (url) => {
-    if (!url) return "";
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/);
-    return match ? `https://www.youtube.com/embed/${match[1]}` : url;
-  };
-
-  return (
-    <>
-      <style>{`
-        .un-page { min-height: 100vh; background: linear-gradient(180deg,#f8fbff,#eef4ff); }
-        .un-hero { padding: 32px; border-radius: 28px; color: #fff; background: linear-gradient(135deg,#0f172a,#1d4ed8,#4f46e5); box-shadow: 0 20px 45px rgba(37,99,235,0.22); }
-        .un-panel { background: #fff; border-radius: 24px; box-shadow: 0 16px 40px rgba(15,23,42,0.08); padding: 24px; }
-        .un-select { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; font-size: 0.9rem; background: #fff; }
-        .un-select:focus { border-color: #2563eb; }
-        .un-chapter-title { font-weight: 800; font-size: 1rem; color: #0f172a; padding: 10px 0 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 14px; }
-        .un-note-card { border: 1px solid #e2e8f0; border-radius: 18px; padding: 18px; margin-bottom: 12px; transition: 0.2s ease; }
-        .un-note-card:hover { border-color: #93c5fd; box-shadow: 0 8px 24px rgba(37,99,235,0.08); }
-        .un-note-card.locked { opacity: 0.65; }
-        .un-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-        .un-badge-free { background: #dcfce7; color: #16a34a; }
-        .un-badge-paid { background: #fef3c7; color: #d97706; }
-        .un-btn { border: none; color: #fff; font-weight: 600; border-radius: 10px; padding: 8px 14px; cursor: pointer; font-size: 0.82rem; }
-        .un-btn-primary { background: linear-gradient(135deg,#2563eb,#4f46e5); }
-        .un-btn-danger { background: linear-gradient(135deg,#dc2626,#ef4444); }
-        .un-btn-green { background: linear-gradient(135deg,#16a34a,#15803d); }
-        .un-locked-msg { display: inline-flex; align-items: center; gap: 6px; background: #fef3c7; color: #92400e; padding: 6px 12px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; }
-
-        /* Fullscreen Modal */
-        .un-modal-overlay {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.92);
-          z-index: 9999;
-          display: flex;
-          flex-direction: column;
-        }
-        .un-modal-topbar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 14px 20px;
-          background: #0f172a;
-          color: #fff;
-          gap: 12px;
-          flex-shrink: 0;
-        }
-        .un-modal-topbar h5 {
-          margin: 0;
-          font-weight: 700;
-          font-size: 1rem;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .un-modal-tabs {
-          display: flex;
-          gap: 8px;
-          flex-shrink: 0;
-        }
-        .un-modal-tab {
-          border: none;
-          font-weight: 600;
-          border-radius: 10px;
-          padding: 7px 14px;
-          cursor: pointer;
-          font-size: 0.82rem;
-          background: rgba(255,255,255,0.12);
-          color: #fff;
-        }
-        .un-modal-tab.active-pdf { background: #2563eb; }
-        .un-modal-tab.active-video { background: #dc2626; }
-        .un-modal-tab.active-external { background: #16a34a; }
-        .un-modal-close {
-          border: none;
-          background: rgba(255,255,255,0.12);
-          color: #fff;
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
-          cursor: pointer;
-          font-size: 18px;
-          flex-shrink: 0;
-        }
-        .un-modal-body {
-          flex: 1;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-        }
-        .un-pdf-frame {
-          width: 100%;
-          height: 100%;
-          border: none;
-          flex: 1;
-        }
-        .un-video-frame {
-          width: 100%;
-          height: 100%;
-          border: none;
-          flex: 1;
-        }
-        .un-ext-body {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-          gap: 16px;
-          color: #fff;
-        }
-        .un-ext-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 14px 28px;
-          border-radius: 14px;
-          background: linear-gradient(135deg,#2563eb,#4f46e5);
-          color: #fff;
-          text-decoration: none;
-          font-weight: 700;
-          font-size: 1rem;
-        }
-
-        .un-toast { position: fixed; top: 20px; right: 20px; z-index: 99999; min-width: 280px; color: #fff; padding: 14px 16px; border-radius: 16px; box-shadow: 0 12px 30px rgba(0,0,0,0.18); }
-        .un-toast.success { background: linear-gradient(135deg,#2563eb,#4f46e5); }
-        .un-toast.error { background: linear-gradient(135deg,#dc2626,#ef4444); }
-
-        @media(max-width:767px){ .un-hero { padding: 24px; } }
-      `}</style>
-
-      {toast.show && <div className={`un-toast ${toast.type}`}>{toast.message}</div>}
-
-      <div className="un-page">
-        <div className="container py-4">
-
-          {/* Hero */}
-          <div className="un-hero mb-4">
+  // Show message if no batches purchased
+  if (!loading && purchasedBatches.length === 0) {
+    return (
+      <div className="app-page">
+        <AppToast toast={toast} onClose={() => setToast({ show: false, message: "", type: "success" })} />
+        <div className="container">
+          <div className="app-hero mb-4">
             <div className="row align-items-center g-4">
               <div className="col-lg-8">
-                <h2 className="fw-bold mb-2">Study Notes</h2>
-                <p className="mb-0" style={{ opacity: 0.88 }}>
-                  Course aur subject wise notes, PDFs aur videos yahan available hain.
-                  Free notes sabke liye, Paid notes purchased batch walo ke liye.
-                </p>
-              </div>
-              <div className="col-lg-4">
-                <div style={{ background: "rgba(255,255,255,0.14)", borderRadius: 18, padding: "16px 20px" }}>
-                  <div style={{ fontSize: 13, opacity: 0.8 }}>Total Notes</div>
-                  <div className="fw-bold" style={{ fontSize: 28 }}>{notes.length}</div>
-                </div>
+                <h2 className="fw-bold mb-2">Study Portal</h2>
+                <p className="mb-0">Access notes for your purchased batches.</p>
               </div>
             </div>
           </div>
-
-          {/* Filters */}
-          <div className="un-panel mb-4">
-            <div className="row g-3">
-              <div className="col-md-4">
-                <select className="un-select" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
-                  <option value="">All Courses</option>
-                  {courses.map((c) => (
-                    <option key={c._id} value={c._id}>{c.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-4">
-                <select className="un-select" value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
-                  <option value="">All Subjects</option>
-                  {subjects.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-4">
-                <select className="un-select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                  <option value="">All Types</option>
-                  <option value="free">🆓 Free Notes</option>
-                  <option value="paid">💰 Paid Notes</option>
-                </select>
-              </div>
+          
+          <div className="col-12">
+            <div className="lms-empty-state text-center py-5 rounded-5 border border-dashed border-secondary border-opacity-50">
+              <PdfIcon size={48} className="mb-3 opacity-25" />
+              <h3 className="h4 opacity-75">No Batch Access</h3>
+              <p className="text-secondary opacity-50">Purchase a batch to access study materials and notes.</p>
             </div>
-          </div>
-
-          {/* Notes */}
-          <div className="un-panel">
-            {loading ? (
-              <div className="text-center py-5 text-muted">Notes load ho rahe hain...</div>
-            ) : notes.length === 0 ? (
-              <div className="text-center py-5 text-muted">
-                <div style={{ fontSize: "3rem", marginBottom: 12 }}>📭</div>
-                Abhi koi note available nahi hai.
-              </div>
-            ) : (
-              Object.entries(grouped).map(([chapter, chapterNotes]) => (
-                <div key={chapter} className="mb-4">
-                  <div className="un-chapter-title">
-                    📖 {chapter}
-                    <span className="text-muted fw-normal" style={{ fontSize: "0.85rem", marginLeft: 8 }}>
-                      ({chapterNotes.length} notes)
-                    </span>
-                  </div>
-
-                  {chapterNotes.map((note) => {
-                    const access = hasAccess(note);
-                    return (
-                      <div key={note._id} className={`un-note-card ${!access ? "locked" : ""}`}>
-                        <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                          <div style={{ flex: 1 }}>
-                            <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
-                              <strong>{note.title}</strong>
-                              <span className={`un-badge un-badge-${note.type}`}>
-                                {note.type === "free" ? "🆓 Free" : "💰 Paid"}
-                              </span>
-                            </div>
-                            {note.description && (
-                              <div className="text-muted small mb-2">{note.description}</div>
-                            )}
-                            <div className="text-muted small">
-                              📚 {note.course?.title || "-"} &nbsp;|&nbsp;
-                              📂 {note.subject || "-"}
-                            </div>
-                          </div>
-
-                          <div className="d-flex gap-2 flex-wrap">
-                            {!access ? (
-                              <span className="un-locked-msg">🔒 Batch purchase karo</span>
-                            ) : (
-                              <>
-                                {note.fileUrl && (
-                                  <button className="un-btn un-btn-primary" onClick={() => setPreviewNote({ ...note, activeTab: "pdf" })}>
-                                    📄 PDF Preview
-                                  </button>
-                                )}
-                                {note.videoLink && (
-                                  <button className="un-btn un-btn-danger" onClick={() => setPreviewNote({ ...note, activeTab: "video" })}>
-                                    🎬 Watch Video
-                                  </button>
-                                )}
-                                {note.externalLink && (
-                                  <button className="un-btn un-btn-green" onClick={() => setPreviewNote({ ...note, activeTab: "external" })}>
-                                    🔗 Open Link
-                                  </button>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))
-            )}
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Fullscreen Modal */}
-      {previewNote && (
-        <div className="un-modal-overlay">
-          <div className="un-modal-topbar">
-            <h5>{previewNote.title}</h5>
-            <div className="un-modal-tabs">
-              {previewNote.fileUrl && (
-                <button
-                  className={`un-modal-tab ${previewNote.activeTab === "pdf" ? "active-pdf" : ""}`}
-                  onClick={() => setPreviewNote({ ...previewNote, activeTab: "pdf" })}
-                >
-                  📄 PDF
-                </button>
-              )}
-              {previewNote.videoLink && (
-                <button
-                  className={`un-modal-tab ${previewNote.activeTab === "video" ? "active-video" : ""}`}
-                  onClick={() => setPreviewNote({ ...previewNote, activeTab: "video" })}
-                >
-                  🎬 Video
-                </button>
-              )}
-              {previewNote.externalLink && (
-                <button
-                  className={`un-modal-tab ${previewNote.activeTab === "external" ? "active-external" : ""}`}
-                  onClick={() => setPreviewNote({ ...previewNote, activeTab: "external" })}
-                >
-                  🔗 Link
-                </button>
+  return (
+    <div className="app-page">
+      <AppToast toast={toast} onClose={() => setToast({ show: false, message: "", type: "success" })} />
+      <div className="container">
+        
+        {/* Hero Section */}
+        <div className="app-hero mb-4">
+          <div className="row align-items-center g-4">
+            <div className="col-lg-8">
+              <h2 className="fw-bold mb-2">Study Portal</h2>
+              <p className="mb-0">Access PDF notes for your purchased batches.</p>
+            </div>
+            <div className="col-lg-4 text-lg-end">
+              {loading ? (
+                <div className="app-skeleton-dark ms-auto" style={{ width: 140, height: 80, borderRadius: 18 }}></div>
+              ) : (
+                <div className="app-stat-card">
+                  <div className="app-label-muted">Available Notes</div>
+                  <h4 className="fw-bold mb-0">{filtered.length}</h4>
+                </div>
               )}
             </div>
-            <button className="un-modal-close" onClick={() => setPreviewNote(null)}>✕</button>
           </div>
+        </div>
 
-          <div className="un-modal-body">
-            {previewNote.activeTab === "pdf" && previewNote.fileUrl && (
-              <iframe src={previewNote.fileUrl} className="un-pdf-frame" title="PDF Preview" />
-            )}
-            {previewNote.activeTab === "video" && previewNote.videoLink && (
-              <iframe src={getYoutubeEmbed(previewNote.videoLink)} className="un-video-frame" title="Video" allowFullScreen />
-            )}
-            {previewNote.activeTab === "external" && previewNote.externalLink && (
-              <div className="un-ext-body">
-                <p>Ye content external platform pe available hai:</p>
-                <a href={previewNote.externalLink} target="_blank" rel="noreferrer" className="un-ext-link">
-                  🔗 Open in New Tab
-                </a>
+        {/* Filter Section */}
+        <div className="row g-3 mb-4">
+          <div className="col-lg-5">
+            <div className="position-relative">
+              <FiSearch className="position-absolute" style={{ left: 14, top: 14, color: "#8c7ba9" }} />
+              <input
+                className="form-control ps-5"
+                placeholder="Search notes or subject..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+              />
+            </div>
+          </div>
+          <div className="col-lg-3">
+            <select
+              className="form-select"
+              value={filterCourse}
+              onChange={(e) => setFilterCourse(e.target.value)}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+            >
+              <option value="">All Courses</option>
+              {courses.map((course) => (
+                <option key={course._id} value={course._id}>
+                  {course.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-lg-3">
+            <select
+              className="form-select"
+              value={filterSubject}
+              onChange={(e) => setFilterSubject(e.target.value)}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+            >
+              <option value="">All Subjects</option>
+              {subjects.map((subject) => (
+                <option key={subject} value={subject}>
+                  {subject}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-lg-1 text-lg-end d-flex align-items-center justify-content-lg-end">
+            <span className="badge bg-info">{filtered.length} PDFs</span>
+          </div>
+        </div>
+
+        {/* Notes Grid */}
+        <div className="row g-4">
+          {loading ? (
+            <div className="col-12">
+              <SkeletonCard count={6} />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="col-12">
+              <div className="lms-empty-state text-center py-5 rounded-5 border border-dashed border-secondary border-opacity-50">
+                <PdfIcon size={48} className="mb-3 opacity-25" />
+                <h3 className="h4 opacity-75">No Notes Found</h3>
+                <p className="text-secondary opacity-50">Notes will appear here for your purchased batches.</p>
               </div>
-            )}
+            </div>
+          ) : (
+            filtered.map((note) => (
+              <div className="col-lg-6" key={note._id}>
+                <div className="lms-resource-card p-4 rounded-4 border border-white border-opacity-10" 
+                     style={{ background: 'rgba(15, 23, 42, 0.4)', transition: 'all 0.3s ease', height: '100%' }}>
+                  
+                  <div className="mb-4 d-flex gap-3">
+                    <PdfIcon size={40} className="flex-shrink-0" />
+                    <div style={{ flex: 1 }}>
+                      <h4 className="h5 fw-bold mb-1 text-white">{note.title}</h4>
+                      <p className="small text-secondary mb-2 opacity-75">
+                        {note.description || "Study material for this chapter."}
+                      </p>
+                      <div className="d-flex gap-2 flex-wrap">
+                        {note.course?.title && (
+                          <span className="badge bg-info bg-opacity-50 text-info">{note.course.title}</span>
+                        )}
+                        {note.subject && (
+                          <span className="badge bg-secondary bg-opacity-50 text-secondary">{note.subject}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="d-flex gap-2">
+                    {(note.fileUrl || note.url) && (
+                      <>
+                        <a href={note.fileUrl || note.url} target="_blank" rel="noreferrer"
+                           className="btn btn-outline-info rounded-pill px-3 flex-grow-1 fw-bold d-flex align-items-center justify-content-center gap-2 small">
+                          <PdfIcon size={16} /> View
+                        </a>
+                        <a href={note.fileUrl || note.url} download
+                           className="btn btn-primary rounded-pill px-3 flex-grow-1 fw-bold d-flex align-items-center justify-content-center gap-2 small">
+                          <FiDownload size={16} /> Download
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {previewNote && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 10000, display: "flex", flexDirection: "column" }}>
+          <div className="p-3 d-flex justify-content-between align-items-center text-white" style={{ background: "#0f172a" }}>
+            <h5 className="mb-0">{previewNote.title}</h5>
+            <button className="btn btn-sm btn-light" onClick={() => setPreviewNote(null)}>Close</button>
+          </div>
+          <div style={{ flex: 1 }}>
+            {previewNote.fileUrl && <iframe src={previewNote.fileUrl} style={{ width: "100%", height: "100%", border: "none" }} />}
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

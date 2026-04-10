@@ -1,1 +1,41 @@
-node_modules 
+node_modules
+**/node_modules
+dist
+**/dist
+.env
+.env.*
+client/.env
+server/.env
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development & Test Files (To be deleted before production)
+server/test_server.js
+server/check_db.js
+server/createAdmin.js
+server/verify_pw.js
+client/public/vite.svg
+client/README.md
+
+# Build artifacts
+client/.dist
+client/.vite
+
+# IDE & OS files
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Optional npm directories
+.npm
+
+# Environment specific
+.env.local
+.env.*.local

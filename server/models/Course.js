@@ -82,4 +82,6 @@ const courseSchema = new mongoose.Schema(
   }
 );
 
+courseSchema.index({ isPublished: 1, status: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Course", courseSchema);

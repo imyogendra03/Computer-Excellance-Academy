@@ -1,382 +1,687 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import React, { useEffect, useState, useMemo } from "react";
+import {
+  FiPlus, FiFolder, FiLayers,
+  FiTrash2, FiEdit3, FiChevronRight,
+  FiArrowLeft, FiMonitor, FiCheckCircle
+} from "react-icons/fi";
+import { lmsApi } from "../../services/lmsApi";
+import AppModal from "../../components/ui/AppModal";
+import { SkeletonCard } from "../../components/ui/SkeletonLoader";
+import { motion, AnimatePresence } from "framer-motion";
+import ContentThumbnail from "../../components/ContentThumbnail";
 
 const AdminNotes = () => {
-  const [notes, setNotes] = useState([]);
-  const [courses, setCourses] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [mode, setMode] = useState("list");
-  const [editId, setEditId] = useState(null);
-  const [pdfFile, setPdfFile] = useState(null);
-  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
-  const [filterCourse, setFilterCourse] = useState("");
-  const [filterType, setFilterType] = useState("");
+  const [viewMode, setViewMode] = useState("batches"); // batches, subjects, chapters, manage
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedChapter, setSelectedChapter] = useState(null);
 
-  const [form, setForm] = useState({
+  const [batchMeta, setBatchMeta] = useState({ subjects: [] });
+  const [batchContent, setBatchContent] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  // Modals state
+  const [subjectModal, setSubjectModal] = useState(false);
+  const [chapterModal, setChapterModal] = useState(false);
+
+  const initialSubjectForm = { subjectname: "", description: "", order: 1 };
+  const initialChapterForm = { title: "", order: 1 };
+  const initialContentForm = {
     title: "",
     description: "",
-    course: "",
-    subject: "",
-    chapter: "",
-    order: 0,
-    type: "free",
-    fileUrl: "",
-    videoLink: "",
-    externalLink: "",
+    type: "video",
+    resourceFormat: "video",
+    url: "",
+    thumbnail: "",
+    duration: 0,
     isPublished: true,
-    status: "active",
-  });
+    order: 1,
+    metadataText: ""
+  };
+
+  const [subjectForm, setSubjectForm] = useState(initialSubjectForm);
+  const [chapterForm, setChapterForm] = useState(initialChapterForm);
+  const [contentForm, setContentForm] = useState(initialContentForm);
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState("");
+
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 2500);
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 3000);
   };
 
-  const fetchNotes = async () => {
+  const parseMetadataInput = (rawText) => {
+    const value = (rawText || "").trim();
+    if (!value) return {};
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      // Support plain text metadata so admin users are not blocked by JSON syntax.
+      return { note: value };
+    }
+  };
+
+  useEffect(() => {
+    if (!thumbnailFile) {
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(thumbnailFile);
+    setThumbnailPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [thumbnailFile]);
+
+  useEffect(() => {
+    fetchBatches();
+  }, []);
+
+  const fetchBatches = async () => {
     try {
       setLoading(true);
-      let url = `${import.meta.env.VITE_API_URL}/api/notes?`;
-      if (filterCourse) url += `courseId=${filterCourse}&`;
-      if (filterType) url += `type=${filterType}`;
-      const res = await axios.get(url);
-      setNotes(res.data?.data || []);
-    } catch {
-      showToast("Notes load nahi ho paaye", "error");
+      const data = await lmsApi.getBatches();
+      setBatches(data);
+    } catch (err) {
+      showToast("Batches loading failed", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchCourses = async () => {
+  const loadBatchDetails = async (batchId) => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/course`);
-      setCourses(res.data?.data || []);
-    } catch {}
-  };
-
-  useEffect(() => {
-    fetchCourses();
-  }, []);
-
-  useEffect(() => {
-    fetchNotes();
-  }, [filterCourse, filterType]);
-
-  const resetForm = () => {
-    setForm({
-      title: "", description: "", course: "", subject: "",
-      chapter: "", order: 0, type: "free", fileUrl: "",
-      videoLink: "", externalLink: "", isPublished: true, status: "active",
-    });
-    setPdfFile(null);
-    setEditId(null);
-  };
-
-  const handleEdit = (note) => {
-    setForm({
-      title: note.title || "",
-      description: note.description || "",
-      course: note.course?._id || note.course || "",
-      subject: note.subject || "",
-      chapter: note.chapter || "",
-      order: note.order || 0,
-      type: note.type || "free",
-      fileUrl: note.fileUrl || "",
-      videoLink: note.videoLink || "",
-      externalLink: note.externalLink || "",
-      isPublished: note.isPublished ?? true,
-      status: note.status || "active",
-    });
-    setEditId(note._id);
-    setMode("form");
-  };
-
-  const handlePdfUpload = async () => {
-    if (!pdfFile) return form.fileUrl;
-    try {
-      const formData = new FormData();
-      formData.append("pdf", pdfFile);
-      const res = await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/notes/upload-pdf`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-      return res.data?.fileUrl || "";
+      setLoading(true);
+      const [meta, content] = await Promise.all([
+        lmsApi.getAdminBatchMeta(batchId),
+        lmsApi.getBatchContent(batchId, "admin")
+      ]);
+      setBatchMeta(meta || { subjects: [] });
+      setBatchContent(content?.flatItems || []);
     } catch (err) {
-      console.error("PDF upload error:", err);
-      showToast("PDF upload failed", "error");
-      return "";
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!form.title) return showToast("Title required", "error");
-    try {
-      setUploading(true);
-      let fileUrl = form.fileUrl;
-      if (pdfFile) fileUrl = await handlePdfUpload();
-
-      const payload = { ...form, fileUrl };
-
-      if (editId) {
-        await axios.put(`${import.meta.env.VITE_API_URL}/api/notes/${editId}`, payload);
-        showToast("Note updated successfully");
-      } else {
-        await axios.post(`${import.meta.env.VITE_API_URL}/api/notes`, payload);
-        showToast("Note created successfully");
-      }
-
-      resetForm();
-      setMode("list");
-      fetchNotes();
-    } catch {
-      showToast("Save failed", "error");
+      showToast("Batch details failed", "error");
     } finally {
-      setUploading(false);
+      setLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this note?")) return;
+  const handleBatchSelect = async (batch) => {
+    setSelectedBatch(batch);
+    await loadBatchDetails(batch._id);
+    setViewMode("subjects");
+  };
+
+  const handleSubjectSelect = (subject) => {
+    setSelectedSubject(subject);
+    setViewMode("chapters");
+  };
+
+  const handleChapterSelect = (chapter) => {
+    setSelectedChapter(chapter);
+    setContentForm({ ...initialContentForm, batchId: selectedBatch._id, subjectId: selectedSubject._id, chapterId: chapter._id });
+    setThumbnailFile(null);
+    setThumbnailPreview("");
+    setViewMode("manage");
+  };
+
+  const goBackToBatches = () => { setViewMode("batches"); setSelectedBatch(null); setSelectedSubject(null); setSelectedChapter(null); };
+  const goBackToSubjects = () => { setViewMode("subjects"); setSelectedSubject(null); setSelectedChapter(null); };
+  const goBackToChapters = () => { setViewMode("chapters"); setSelectedChapter(null); };
+
+  // CREATE/UPDATE Handlers
+  const handleCreateSubject = async (e) => {
+    e.preventDefault();
+    if (!subjectForm.subjectname) return showToast("Subject name required", "error");
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/notes/${id}`);
-      showToast("Note deleted");
-      fetchNotes();
-    } catch {
+      setSaving(true);
+      if (subjectForm._id) {
+        await lmsApi.updateSubject(subjectForm._id, subjectForm);
+        showToast("Subject updated successfully");
+      } else {
+        await lmsApi.createSubject({ ...subjectForm, batchId: selectedBatch._id });
+        showToast("Subject created successfully");
+      }
+      await loadBatchDetails(selectedBatch._id);
+      setSubjectModal(false);
+      setSubjectForm(initialSubjectForm);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Operation failed";
+      showToast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateChapter = async (e) => {
+    e.preventDefault();
+    if (!chapterForm.title) return showToast("Chapter title required", "error");
+    try {
+      setSaving(true);
+      if (chapterForm._id) {
+        await lmsApi.updateChapter(chapterForm._id, chapterForm);
+        showToast("Chapter updated successfully");
+      } else {
+        await lmsApi.createChapter({ ...chapterForm, batchId: selectedBatch._id, subjectId: selectedSubject._id });
+        showToast("Chapter created successfully");
+      }
+      await loadBatchDetails(selectedBatch._id);
+      setChapterModal(false);
+      setChapterForm(initialChapterForm);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Operation failed";
+      showToast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSubject = async (e, id) => {
+    e.stopPropagation();
+    if (!window.confirm("Deleting a subject will remove all its modules?")) return;
+    try {
+      await lmsApi.deleteSubject(id);
+      showToast("Subject removed");
+      await loadBatchDetails(selectedBatch._id);
+    } catch (err) {
       showToast("Delete failed", "error");
     }
   };
 
-  return (
-    <>
-      <style>{`
-        .an-page { min-height: 100vh; background: linear-gradient(180deg,#f8fbff,#eef4ff); }
-        .an-hero { padding: 32px; border-radius: 28px; color: #fff; background: linear-gradient(135deg,#0f172a,#1d4ed8,#4f46e5); box-shadow: 0 20px 45px rgba(37,99,235,0.22); margin-bottom: 24px; }
-        .an-panel { background: #fff; border-radius: 24px; box-shadow: 0 16px 40px rgba(15,23,42,0.08); padding: 24px; }
-        .an-btn { border: none; color: #fff; font-weight: 600; border-radius: 12px; padding: 10px 18px; cursor: pointer; }
-        .an-btn-primary { background: linear-gradient(135deg,#2563eb,#4f46e5); }
-        .an-btn-success { background: linear-gradient(135deg,#16a34a,#15803d); }
-        .an-btn-danger { background: linear-gradient(135deg,#dc2626,#ef4444); }
-        .an-btn-secondary { background: #64748b; }
-        .an-input { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; font-size: 0.9rem; }
-        .an-input:focus { border-color: #2563eb; }
-        .an-label { font-weight: 600; font-size: 0.85rem; color: #374151; margin-bottom: 6px; display: block; }
-        .an-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-        .an-badge-free { background: #dcfce7; color: #16a34a; }
-        .an-badge-paid { background: #fef3c7; color: #d97706; }
-        .an-badge-pub { background: #dbeafe; color: #1d4ed8; }
-        .an-badge-unpub { background: #fee2e2; color: #dc2626; }
-        .an-toast { position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 280px; color: #fff; padding: 14px 16px; border-radius: 16px; box-shadow: 0 12px 30px rgba(0,0,0,0.18); }
-        .an-toast.success { background: linear-gradient(135deg,#2563eb,#4f46e5); }
-        .an-toast.error { background: linear-gradient(135deg,#dc2626,#ef4444); }
-        .an-select { width: 100%; padding: 11px 14px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; font-size: 0.9rem; background: #fff; }
-        .an-select:focus { border-color: #2563eb; }
-        .an-type-toggle { display: flex; gap: 10px; }
-        .an-type-btn { flex: 1; padding: 10px; border-radius: 12px; border: 2px solid #e2e8f0; background: #fff; font-weight: 600; cursor: pointer; }
-        .an-type-btn.active-free { border-color: #16a34a; background: #dcfce7; color: #16a34a; }
-        .an-type-btn.active-paid { border-color: #d97706; background: #fef3c7; color: #d97706; }
-        .an-note-card { border: 1px solid #e2e8f0; border-radius: 18px; padding: 18px; margin-bottom: 14px; }
-        .an-note-card:hover { border-color: #93c5fd; box-shadow: 0 8px 24px rgba(37,99,235,0.08); }
-      `}</style>
+  const handleDeleteChapter = async (e, id) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this chapter?")) return;
+    try {
+      await lmsApi.deleteChapter(id);
+      showToast("Chapter removed");
+      await loadBatchDetails(selectedBatch._id);
+    } catch (err) {
+      showToast("Delete failed", "error");
+    }
+  };
 
-      {toast.show && (
-        <div className={`an-toast ${toast.type}`}>{toast.message}</div>
-      )}
+  const openEditSubject = (e, sub) => {
+    e.stopPropagation();
+    setSubjectForm({ _id: sub._id, subjectname: sub.title || sub.subjectname, description: sub.description || "", order: sub.order || 1 });
+    setSubjectModal(true);
+  };
 
-      <div className="an-page">
-        <div className="container py-4">
+  const openEditChapter = (e, chap) => {
+    e.stopPropagation();
+    setChapterForm({ _id: chap._id, title: chap.title, order: chap.order || 1 });
+    setChapterModal(true);
+  };
 
-          <div className="an-hero">
-            <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-              <div>
-                <h2 className="fw-bold mb-2">Notes Management</h2>
-                <p className="mb-0" style={{ opacity: 0.88 }}>
-                  Course aur subject wise notes, PDFs, videos manage karo.
-                </p>
+  const resetContentForm = () => {
+    setContentForm({
+      ...initialContentForm,
+      batchId: selectedBatch?._id,
+      subjectId: selectedSubject?._id,
+      chapterId: selectedChapter?._id,
+    });
+    setThumbnailFile(null);
+    setThumbnailPreview("");
+  };
+
+  const buildContentPayload = () => {
+    const metadata = parseMetadataInput(contentForm.metadataText);
+    const basePayload = {
+      ...contentForm,
+      metadata,
+      order: Number(contentForm.order) || 0,
+      duration: Number(contentForm.duration) || 0,
+      isPublished: contentForm.isPublished !== false,
+    };
+
+    if (!thumbnailFile) {
+      return basePayload;
+    }
+
+    const formData = new FormData();
+    Object.entries(basePayload).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+
+      if (key === "metadata") {
+        formData.append("metadata", JSON.stringify(value));
+        return;
+      }
+
+      if (typeof value === "object" && !(value instanceof File)) {
+        formData.append(key, JSON.stringify(value));
+        return;
+      }
+
+      formData.append(key, value);
+    });
+
+    formData.append("thumbnailFile", thumbnailFile);
+    return formData;
+  };
+
+  const handleCreateContent = async (e) => {
+    e.preventDefault();
+    if (!contentForm.title || !contentForm.url) return showToast("Title and URL required", "error");
+    try {
+      setSaving(true);
+      const payload = buildContentPayload();
+      if (contentForm._id) {
+        await lmsApi.updateContent(contentForm._id, payload);
+        showToast("Lecture updated successfully");
+      } else {
+        await lmsApi.createContent(payload);
+        showToast("Lecture uploaded successfully");
+      }
+      await loadBatchDetails(selectedBatch._id);
+      resetContentForm();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Operation failed";
+      showToast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteContent = async (id) => {
+    if (!window.confirm("Delete this content?")) return;
+    try {
+      await lmsApi.deleteContent(id);
+      showToast("Deleted successfully");
+      await loadBatchDetails(selectedBatch._id);
+    } catch (err) {
+      showToast("Delete failed", "error");
+    }
+  };
+
+  const handleEditContent = (item) => {
+    setContentForm({
+      ...item,
+      metadataText: item.metadata ? JSON.stringify(item.metadata) : "",
+      batchId: selectedBatch._id,
+      subjectId: selectedSubject._id,
+      chapterId: selectedChapter._id
+    });
+    setThumbnailFile(null);
+    setThumbnailPreview(item.thumbnail || "");
+  };
+
+  const currentChapterItems = useMemo(
+    () =>
+      batchContent
+        .filter((entry) => {
+  const id = entry.chapterId?._id || entry.chapterId;
+  return String(id) === String(selectedChapter?._id);
+})
+        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)),
+    [batchContent, selectedChapter?._id]
+  );
+
+  // UI Renderers
+  const renderBatches = () => (
+    loading ? <SkeletonCard count={6} /> : (
+      <div className="row g-4">
+        {batches.map((batch) => (
+          <div className="col-lg-4 col-md-6" key={batch._id}>
+            <div className="app-mobile-card clickable h-100 d-flex flex-column" onClick={() => handleBatchSelect(batch)} style={{ cursor: "pointer", transition: "0.2s" }}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="app-badge">Batch</div>
+                <FiChevronRight className="text-primary" />
               </div>
-              {mode === "list" ? (
-                <button className="an-btn an-btn-primary" onClick={() => { resetForm(); setMode("form"); }}>
-                  + Add Note
-                </button>
-              ) : (
-                <button className="an-btn an-btn-secondary" onClick={() => { resetForm(); setMode("list"); }}>
-                  ← Back to List
-                </button>
+              <h5 className="fw-bold mb-1">{batch.batchName}</h5>
+              <p className="text-muted small mb-0">{batch.course?.title || "Regular Cohort"}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  );
+
+  const renderSubjects = () => (
+    loading ? <SkeletonCard count={3} /> : (
+      <div className="row g-4">
+        <div className="col-lg-4 col-md-6">
+          <div className="app-mobile-card h-100 d-flex flex-column justify-content-center align-items-center text-center p-5 dashed"
+            onClick={() => { setSubjectForm(initialSubjectForm); setSubjectModal(true); }}
+            style={{ border: "2px dashed #cbd5e1", background: "transparent", color: "#64748b", cursor: "pointer" }}>
+            <div className="mb-3" style={{ background: "#f1f5f9", width: 60, height: 60, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <FiPlus size={24} />
+            </div>
+            <h6 className="fw-bold mb-1">Add New Subject</h6>
+            <p className="small mb-0 opacity-75">Create a new module for this batch</p>
+          </div>
+        </div>
+        {batchMeta.subjects.map((sub) => (
+          <div className="col-lg-4 col-md-6" key={sub._id}>
+            <div className="app-mobile-card clickable h-100 d-flex flex-column" onClick={() => handleSubjectSelect(sub)} style={{ cursor: "pointer", transition: "0.2s", borderLeft: "4px solid #6366f1" }}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <FiFolder size={20} className="text-indigo" />
+                <div className="d-flex gap-2">
+                  <button className="btn btn-sm btn-light p-1" onClick={(e) => openEditSubject(e, sub)}><FiEdit3 size={14}/></button>
+                  <button className="btn btn-sm btn-light p-1 text-danger" onClick={(e) => handleDeleteSubject(e, sub._id)}><FiTrash2 size={14}/></button>
+                </div>
+              </div>
+              <h5 className="fw-bold mb-1">{sub.title||sub.subjectname }</h5>
+              <p className="text-muted small mb-0">{sub.chapterCount || 0} Chapters available</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  );
+
+  const renderChapters = () => (
+    loading ? <SkeletonCard count={3} /> : (
+      <div className="row g-4">
+        <div className="col-lg-4 col-md-6">
+          <div className="app-mobile-card h-100 d-flex flex-column justify-content-center align-items-center text-center p-5 dashed"
+            onClick={() => { setChapterForm(initialChapterForm); setChapterModal(true); }}
+            style={{ border: "2px dashed #cbd5e1", background: "transparent", color: "#64748b", cursor: "pointer" }}>
+            <FiPlus size={24} className="mb-3" />
+            <h6 className="fw-bold mb-1">Add New Chapter</h6>
+            <p className="small mb-0 opacity-75">Categorize your lectures</p>
+          </div>
+        </div>
+        {(batchMeta.subjects.find(s => s._id === selectedSubject._id)?.chapters || []).map((chap) => (
+          <div className="col-lg-4 col-md-6" key={chap._id}>
+            <div className="app-mobile-card clickable h-100 d-flex flex-column" onClick={() => handleChapterSelect(chap)} style={{ cursor: "pointer", transition: "0.2s" }}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <FiLayers size={20} className="text-primary" />
+                <div className="d-flex gap-2">
+                  <button className="btn btn-sm btn-light p-1" onClick={(e) => openEditChapter(e, chap)}><FiEdit3 size={14}/></button>
+                  <button className="btn btn-sm btn-light p-1 text-danger" onClick={(e) => handleDeleteChapter(e, chap._id)}><FiTrash2 size={14} /></button>
+                </div>
+              </div>
+              <h5 className="fw-bold mb-1">{chap.title}</h5>
+              <p className="text-muted small mb-0">{chap.contentCount || 0} Lectures inside</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  );
+
+  return (
+    <div className="app-page pb-5">
+      <style>{`
+        .an-upload-panel {
+          border-radius: 26px;
+          background: linear-gradient(180deg, #ffffff 0%, #fcf9ff 100%);
+          border: 1px solid #e7dbff;
+          box-shadow: 0 18px 38px rgba(31, 12, 81, 0.08);
+        }
+        .an-upload-header {
+          padding: 18px 20px;
+          border-radius: 22px;
+          background: linear-gradient(135deg, #eef7ff, #f7f0ff);
+          border: 1px solid #e5dbff;
+        }
+        .an-section-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 7px 12px;
+          border-radius: 999px;
+          background: #efe6ff;
+          color: #7b4cdd;
+          border: 1px solid #e4d6ff;
+          font-size: 0.75rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+        .an-helper {
+          padding: 14px 16px;
+          border-radius: 18px;
+          background: #f8f5ff;
+          border: 1px solid #eaddff;
+          color: #5f4f87;
+          font-size: 0.88rem;
+          font-weight: 600;
+          line-height: 1.6;
+        }
+        .an-select-card {
+          border-radius: 24px;
+          border: 1px solid rgba(111,60,242,0.12) !important;
+          background: linear-gradient(180deg, #ffffff 0%, #fcf9ff 100%) !important;
+          box-shadow: 0 18px 38px rgba(33,17,73,0.08);
+        }
+      `}</style>
+      <div className="container py-4">
+
+        {/* Navigation Breadcrumb / Hero */}
+        <div className="app-hero mb-4">
+          <div className="row align-items-center">
+            <div className="col-md-8">
+              {viewMode === "batches" && (
+                <>
+                  <h2 className="fw-bold mb-2" style={{ color: "#22154c" }}>Curriculum & Notes Manager</h2>
+                  <p className="mb-0" style={{ color: "#5f618d" }}>Select a batch to manage its subjects, chapters, and study materials.</p>
+                </>
+              )}
+              {viewMode === "subjects" && (
+                <>
+                  <button onClick={goBackToBatches} className="btn btn-link p-0 mb-3 text-decoration-none d-flex align-items-center gap-2" style={{ color: "#6f3cf2" }}>
+                    <FiArrowLeft /> Back to Batches
+                  </button>
+                  <h2 className="fw-bold mb-1" style={{ color: "#22154c" }}>{selectedBatch.batchName}</h2>
+                  <p className="mb-0" style={{ color: "#5f618d" }}>Manage Subjects and Core Modules</p>
+                </>
+              )}
+              {viewMode === "chapters" && (
+                <>
+                  <button onClick={goBackToSubjects} className="btn btn-link p-0 mb-3 text-decoration-none d-flex align-items-center gap-2" style={{ color: "#6f3cf2" }}>
+                    <FiArrowLeft /> Back to {selectedBatch.batchName}
+                  </button>
+                  <h2 className="fw-bold mb-1" style={{ color: "#22154c" }}>{selectedSubject.title}</h2>
+                  <p className="mb-0" style={{ color: "#5f618d" }}>Manage Chapters for this subject</p>
+                </>
+              )}
+              {viewMode === "manage" && (
+                <>
+                  <button onClick={goBackToChapters} className="btn btn-link p-0 mb-3 text-decoration-none d-flex align-items-center gap-2" style={{ color: "#6f3cf2" }}>
+                    <FiArrowLeft /> Back to {selectedSubject.title}
+                  </button>
+                  <h2 className="fw-bold mb-1" style={{ color: "#22154c" }}>{selectedChapter.title}</h2>
+                  <p className="mb-0" style={{ color: "#5f618d" }}>Manage Lectures, Notes and DPPs</p>
+                </>
               )}
             </div>
           </div>
-
-          {mode === "list" ? (
-            <div className="an-panel">
-              <div className="row g-3 mb-4">
-                <div className="col-md-4">
-                  <select className="an-select" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
-                    <option value="">All Courses</option>
-                    {courses.map((c) => (
-                      <option key={c._id} value={c._id}>{c.title}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-4">
-                  <select className="an-select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                    <option value="">All Types</option>
-                    <option value="free">Free</option>
-                    <option value="paid">Paid</option>
-                  </select>
-                </div>
-                <div className="col-md-4 d-flex align-items-center">
-                  <span className="text-muted">{notes.length} notes found</span>
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="text-center py-5 text-muted">Loading notes...</div>
-              ) : notes.length === 0 ? (
-                <div className="text-center py-5 text-muted">Koi note nahi mila. "+ Add Note" se banao.</div>
-              ) : (
-                notes.map((note) => (
-                  <div className="an-note-card" key={note._id}>
-                    <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                      <div style={{ flex: 1 }}>
-                        <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
-                          <strong>{note.title}</strong>
-                          <span className={`an-badge an-badge-${note.type}`}>{note.type}</span>
-                          <span className={`an-badge ${note.isPublished ? "an-badge-pub" : "an-badge-unpub"}`}>
-                            {note.isPublished ? "Published" : "Unpublished"}
-                          </span>
-                        </div>
-                        <div className="text-muted small mb-1">
-                          📚 {note.course?.title || "No Course"} &nbsp;|&nbsp;
-                          📂 {note.subject || "-"} &nbsp;|&nbsp;
-                          📖 {note.chapter || "-"}
-                        </div>
-                        {note.description && (
-                          <div className="text-muted small">{note.description}</div>
-                        )}
-                        <div className="d-flex gap-3 mt-2 flex-wrap">
-                          {note.fileUrl && <span className="text-primary small">📄 PDF attached</span>}
-                          {note.videoLink && <span className="text-danger small">🎬 Video linked</span>}
-                          {note.externalLink && <span className="text-success small">🔗 External link</span>}
-                        </div>
-                      </div>
-                      <div className="d-flex gap-2">
-                        <button className="an-btn an-btn-primary" style={{ padding: "8px 14px" }} onClick={() => handleEdit(note)}>Edit</button>
-                        <button className="an-btn an-btn-danger" style={{ padding: "8px 14px" }} onClick={() => handleDelete(note._id)}>Delete</button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          ) : (
-            <div className="an-panel">
-              <h4 className="fw-bold mb-4">{editId ? "Edit Note" : "Add New Note"}</h4>
-
-              <div className="row g-3">
-                <div className="col-12">
-                  <label className="an-label">Title *</label>
-                  <input className="an-input" placeholder="Note title..." value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-                </div>
-
-                <div className="col-12">
-                  <label className="an-label">Description</label>
-                  <textarea className="an-input" rows={3} placeholder="Short description..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">Course</label>
-                  <select className="an-select" value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })}>
-                    <option value="">Select Course</option>
-                    {courses.map((c) => (
-                      <option key={c._id} value={c._id}>{c.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">Subject</label>
-                  <input className="an-input" placeholder="e.g. Mathematics, English..." value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">Chapter / Lecture</label>
-                  <input className="an-input" placeholder="e.g. Chapter 1, Lecture 3..." value={form.chapter} onChange={(e) => setForm({ ...form, chapter: e.target.value })} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">Order (sequence number)</label>
-                  <input type="number" className="an-input" value={form.order} onChange={(e) => setForm({ ...form, order: Number(e.target.value) })} />
-                </div>
-
-                <div className="col-12">
-                  <label className="an-label">Note Type</label>
-                  <div className="an-type-toggle">
-                    <button type="button" className={`an-type-btn ${form.type === "free" ? "active-free" : ""}`} onClick={() => setForm({ ...form, type: "free" })}>
-                      🆓 Free
-                    </button>
-                    <button type="button" className={`an-type-btn ${form.type === "paid" ? "active-paid" : ""}`} onClick={() => setForm({ ...form, type: "paid" })}>
-                      💰 Paid
-                    </button>
-                  </div>
-                </div>
-
-                <div className="col-12">
-                  <label className="an-label">Upload PDF</label>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    className="an-input"
-                    onChange={(e) => setPdfFile(e.target.files[0])}
-                  />
-                  {form.fileUrl && !pdfFile && (
-                    <div className="mt-2 text-success small">✅ PDF already uploaded</div>
-                  )}
-                  {pdfFile && (
-                    <div className="mt-2 text-primary small">📄 {pdfFile.name} selected</div>
-                  )}
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">Video Link (YouTube)</label>
-                  <input className="an-input" placeholder="https://youtube.com/watch?v=..." value={form.videoLink} onChange={(e) => setForm({ ...form, videoLink: e.target.value })} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">External Link (Google Drive etc.)</label>
-                  <input className="an-input" placeholder="https://drive.google.com/..." value={form.externalLink} onChange={(e) => setForm({ ...form, externalLink: e.target.value })} />
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">Published</label>
-                  <select className="an-select" value={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.value === "true" })}>
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-
-                <div className="col-md-6">
-                  <label className="an-label">Status</label>
-                  <select className="an-select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-
-                <div className="col-12 d-flex gap-3 mt-2">
-                  <button className="an-btn an-btn-success" onClick={handleSubmit} disabled={uploading}>
-                    {uploading ? "Saving..." : editId ? "Update Note" : "Save Note"}
-                  </button>
-                  <button className="an-btn an-btn-secondary" onClick={() => { resetForm(); setMode("list"); }}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Content Area with Framer Motion */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={viewMode + (selectedBatch?._id || "")}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            {viewMode === "batches" && renderBatches()}
+            {viewMode === "subjects" && renderSubjects()}
+            {viewMode === "chapters" && renderChapters()}
+            {viewMode === "manage" && (
+              <div>
+                {/* Content Form - Full Width at Top */}
+                <div className="app-panel an-upload-panel mb-4">
+                  <div className="an-upload-header mb-4">
+                    <div className="an-section-tag mb-2">Content Upload Studio</div>
+                    <h5 className="fw-bold mb-2">{contentForm._id ? "Edit Lecture / PDF" : "Add New Lecture / PDF"}</h5>
+                    <p className="text-muted small mb-0">Fill title, type, URL, duration, and thumbnail. Videos, notes, DPPs, and solutions can all be added from here.</p>
+                  </div>
+                  <div className="p-4">
+                    <div className="an-helper mb-4">
+                      Tip: use clear lecture titles, chapter-wise order numbers, and a thumbnail for better student engagement.
+                    </div>
+                    <form onSubmit={handleCreateContent}>
+                      <div className="row g-3">
+                        <div className="col-md-6">
+                          <label className="small fw-bold mb-1">Lecture Title</label>
+                          <input className="app-input" value={contentForm.title} onChange={e => setContentForm({ ...contentForm, title: e.target.value })} placeholder="e.g. Introduction to HTML" />
+                        </div>
+                        <div className="col-md-6">
+                          <label className="small fw-bold mb-1">Content Type</label>
+                          <select className="app-input" value={contentForm.type} onChange={e => setContentForm({ ...contentForm, type: e.target.value, resourceFormat: e.target.value === "video" ? "video" : "pdf" })}>
+                            <option value="video">Video Lecture</option>
+                            <option value="note">PDF Notes</option>
+                            <option value="dpp">DPP (Daily Practice)</option>
+                            <option value="solution">DPP Solution</option>
+                          </select>
+                        </div>
+                        <div className="col-12">
+                          <label className="small fw-bold mb-1">Description</label>
+                          <textarea className="app-input" rows={3} value={contentForm.description || ""} onChange={e => setContentForm({ ...contentForm, description: e.target.value })} placeholder="Short lecture summary (optional)" />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="small fw-bold mb-1">Order</label>
+                          <input type="number" className="app-input" value={contentForm.order} onChange={e => setContentForm({ ...contentForm, order: e.target.value })} placeholder="1" />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="small fw-bold mb-1">Duration (sec)</label>
+                          <input type="number" className="app-input" value={contentForm.duration || 0} onChange={e => setContentForm({ ...contentForm, duration: e.target.value })} placeholder="600" />
+                        </div>
+                        <div className="col-md-6">
+                          <label className="small fw-bold mb-1">Resource URL / ID</label>
+                          <input className="app-input" value={contentForm.url} onChange={e => setContentForm({ ...contentForm, url: e.target.value })} placeholder="Vimeo URL or PDF Link" />
+                        </div>
+                        <div className="col-md-6">
+                          <label className="small fw-bold mb-1">Thumbnail URL (Optional)</label>
+                          <input className="app-input" value={contentForm.thumbnail || ""} onChange={e => setContentForm({ ...contentForm, thumbnail: e.target.value })} placeholder="https://.../thumbnail.jpg" />
+                        </div>
+                        <div className="col-md-6">
+                          <label className="small fw-bold mb-1">Upload Thumbnail (Optional)</label>
+                          <input
+                            type="file"
+                            className="app-input"
+                            accept="image/*"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] || null;
+                              setThumbnailFile(file);
+                            }}
+                          />
+                        </div>
+                        <div className="col-md-6">
+                          <label className="small fw-bold mb-2 d-block">Thumbnail Preview</label>
+                          {thumbnailPreview || contentForm.thumbnail ? (
+                            <img
+                              src={thumbnailPreview || contentForm.thumbnail}
+                              alt="Thumbnail preview"
+                              style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
+                            />
+                          ) : (
+                            <ContentThumbnail
+                              item={contentForm}
+                              className="w-100"
+                              style={{ height: 120 }}
+                              showLabel
+                            />
+                          )}
+                        </div>
+                        <div className="col-12">
+                          <label className="small fw-bold mb-1">Metadata / JSON (Optional)</label>
+                          <textarea className="app-input" rows={2} value={contentForm.metadataText || ""} onChange={e => setContentForm({ ...contentForm, metadataText: e.target.value })} placeholder='{"timer": 900, "questions": []} or plain note text' />
+                        </div>
+                        <div className="col-12">
+                          <button className="app-btn-primary" type="submit" disabled={saving}>
+                            {saving ? "Saving..." : contentForm._id ? "Update Lecture" : "Add to Chapter"}
+                          </button>
+                          {contentForm._id && <button type="button" className="btn btn-link ms-2 text-decoration-none small" onClick={resetContentForm}>Cancel Edit</button>}
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+
+                {/* Content List - Full Width Below */}
+                <div className="app-panel p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h5 className="fw-bold mb-0">Lectures & Study Material</h5>
+                    <div className="app-badge">{currentChapterItems.length} Items</div>
+                  </div>
+
+                  <div className="d-flex flex-column gap-3">
+                    {currentChapterItems.map((item, idx) => (
+                      <div key={item._id} className="p-3 border-bottom d-flex align-items-center justify-content-between bg-hover">
+                        <div className="d-flex align-items-center gap-3">
+                          <ContentThumbnail
+                            item={item}
+                            className="rounded-3"
+                            style={{ width: 72, height: 48, flexShrink: 0 }}
+                            showLabel={false}
+                          />
+                          <div>
+                            <h6 className="fw-bold mb-0">{idx + 1}. {item.title}</h6>
+                            <span className="text-muted small text-uppercase">{item.type} • {item.resourceFormat}</span>
+                          </div>
+                        </div>
+                        <div className="d-flex gap-2">
+                          <button className="btn btn-sm btn-light p-2" onClick={() => handleEditContent(item)}><FiEdit3 /></button>
+                          <button className="btn btn-sm btn-soft-danger p-2" onClick={() => handleDeleteContent(item._id)}><FiTrash2 /></button>
+                        </div>
+                      </div>
+                    ))}
+                    {currentChapterItems.length === 0 && (
+                      <div className="text-center py-5">
+                        <FiMonitor className="text-muted mb-3" size={40} style={{ opacity: 0.3 }} />
+                        <p className="text-muted">No lectures added to this chapter yet.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        {/* MODALS */}
+        <AppModal open={subjectModal} onClose={() => setSubjectModal(false)} title={subjectForm._id ? "Edit Subject" : "Create New Subject"} subtitle="Categorize your curriculum with subjects">
+          <form onSubmit={handleCreateSubject}>
+            <div className="mb-3">
+              <label className="fw-bold small mb-1">Subject Name</label>
+              <input className="app-input" value={subjectForm.subjectname} onChange={e => setSubjectForm({ ...subjectForm, subjectname: e.target.value })} placeholder="e.g. Advanced Javascript" />
+            </div>
+            <div className="mb-4">
+              <label className="fw-bold small mb-1">Description</label>
+              <textarea className="app-input" rows={3} value={subjectForm.description} onChange={e => setSubjectForm({ ...subjectForm, description: e.target.value })} placeholder="Brief about this subject..." />
+            </div>
+            <button className="app-btn-primary w-100" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Subject"}</button>
+          </form>
+        </AppModal>
+
+        <AppModal open={chapterModal} onClose={() => setChapterModal(false)} title="Manage Chapter" subtitle="Chapters help organize your lectures">
+          <form onSubmit={handleCreateChapter}>
+            <div className="mb-4">
+              <label className="fw-bold small mb-1">Chapter Title</label>
+              <input className="app-input" value={chapterForm.title} onChange={e => setChapterForm({ ...chapterForm, title: e.target.value })} placeholder="e.g. Chapter 1: Introduction" />
+            </div>
+            <button className="app-btn-primary w-100" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Chapter"}</button>
+          </form>
+        </AppModal>
+
+        {/* Toast */}
+        {toast.show && (
+          <div className={`app-toast-container ${toast.type}`}>
+            <FiCheckCircle className="me-2" /> {toast.message}
+          </div>
+        )}
       </div>
-    </>
+
+      <style>{`
+        .bg-hover:hover { background: #f8fafc; }
+        .dashed:hover { border-color: #6366f1 !important; color: #6366f1 !important; }
+        .app-toast-container {
+          position: fixed; top: 20px; right: 20px; z-index: 9999;
+          padding: 12px 20px; border-radius: 12px; color: white;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; align-items: center;
+        }
+        .app-toast-container.success { background: #2563eb; }
+        .app-toast-container.error { background: #ef4444; }
+      `}</style>
+    </div>
   );
 };
 

@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { FiCalendar, FiClock, FiEdit3, FiLayers, FiPlus, FiSearch, FiTrash2, FiX } from "react-icons/fi";
+import { SkeletonTable, SkeletonStats } from "../../components/ui/SkeletonLoader";
+import AppToast from "../../components/ui/AppToast";
+import "../../components/ui/app-ui.css";
 
 const initialForm = {
   examName: "",
@@ -10,47 +14,48 @@ const initialForm = {
   passingMarks: "",
   sessionId: "",
   status: "Scheduled",
+  questionMode: "distribution",
   questionDistribution: [{ subject: "", numberOfQuestions: "" }],
+  manualQuestionIds: [],
 };
 
 const Examination = () => {
   const [formData, setFormData] = useState(initialForm);
   const [subjects, setSubjects] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [questions, setQuestions] = useState([]);
   const [exams, setExams] = useState([]);
   const [search, setSearch] = useState("");
+  const [questionSearch, setQuestionSearch] = useState("");
   const [fetching, setFetching] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingExamId, setEditingExamId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState({
-    show: false,
-    message: "",
-    type: "success",
-  });
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
   const isEditing = Boolean(editingExamId);
+  const token = localStorage.getItem("adminToken");
+  const authConfig = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(() => {
-      setToast({ show: false, message: "", type: "success" });
-    }, 2500);
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 2500);
   };
 
   const fetchData = async () => {
     try {
       setFetching(true);
-      const [subjectRes, sessionRes, examRes] = await Promise.all([
+      const [subjectRes, sessionRes, examRes, questionRes] = await Promise.all([
         axios.get(`${import.meta.env.VITE_API_URL}/api/subject`),
         axios.get(`${import.meta.env.VITE_API_URL}/api/session`),
-        axios.get(`${import.meta.env.VITE_API_URL}/api/exams/exams`),
+        axios.get(`${import.meta.env.VITE_API_URL}/api/exams/exams`, authConfig),
+        axios.get(`${import.meta.env.VITE_API_URL}/api/question`, authConfig),
       ]);
-
       setSubjects(subjectRes?.data?.data || []);
       setSessions(sessionRes?.data?.data || []);
       setExams(examRes?.data || []);
+      setQuestions(questionRes?.data?.data || []);
     } catch (err) {
       showToast("Failed to load examination data", "error");
     } finally {
@@ -66,6 +71,7 @@ const Examination = () => {
     setFormData(initialForm);
     setEditingExamId(null);
     setError("");
+    setQuestionSearch("");
     setModalOpen(true);
   };
 
@@ -74,33 +80,25 @@ const Examination = () => {
     setFormData(initialForm);
     setEditingExamId(null);
     setError("");
+    setQuestionSearch("");
   };
 
-  const handleChange = (e) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+  const handleChange = (event) => {
+    setFormData((prev) => ({ ...prev, [event.target.name]: event.target.value }));
     setError("");
   };
 
-  const handleQuestionDistChange = (index, e) => {
+  const handleQuestionDistChange = (index, event) => {
     const updated = [...formData.questionDistribution];
-    updated[index][e.target.name] = e.target.value;
-    setFormData((prev) => ({
-      ...prev,
-      questionDistribution: updated,
-    }));
+    updated[index][event.target.name] = event.target.value;
+    setFormData((prev) => ({ ...prev, questionDistribution: updated }));
     setError("");
   };
 
   const addDistributionField = () => {
     setFormData((prev) => ({
       ...prev,
-      questionDistribution: [
-        ...prev.questionDistribution,
-        { subject: "", numberOfQuestions: "" },
-      ],
+      questionDistribution: [...prev.questionDistribution, { subject: "", numberOfQuestions: "" }],
     }));
   };
 
@@ -109,87 +107,66 @@ const Examination = () => {
       setError("At least one subject is required");
       return;
     }
-
     const updated = [...formData.questionDistribution];
     updated.splice(index, 1);
+    setFormData((prev) => ({ ...prev, questionDistribution: updated }));
+  };
 
-    setFormData((prev) => ({
-      ...prev,
-      questionDistribution: updated,
-    }));
+  const toggleManualQuestion = (questionId) => {
+    setFormData((prev) => {
+      const exists = prev.manualQuestionIds.includes(questionId);
+      return {
+        ...prev,
+        manualQuestionIds: exists
+          ? prev.manualQuestionIds.filter((id) => id !== questionId)
+          : [...prev.manualQuestionIds, questionId],
+      };
+    });
   };
 
   const validateForm = () => {
-    if (
-      !formData.examName ||
-      !formData.date ||
-      !formData.time ||
-      !formData.duration ||
-      !formData.totalMarks ||
-      !formData.passingMarks ||
-      !formData.sessionId
-    ) {
+    if (!formData.examName || !formData.date || !formData.time || !formData.duration || !formData.totalMarks || !formData.passingMarks || !formData.sessionId) {
       return "All fields are required";
     }
-
-    if (parseInt(formData.passingMarks, 10) > parseInt(formData.totalMarks, 10)) {
+    if (Number(formData.passingMarks) > Number(formData.totalMarks)) {
       return "Passing marks cannot exceed total marks";
     }
-
-    if (
-      formData.questionDistribution.some(
-        (dist) =>
-          !dist.subject ||
-          !dist.numberOfQuestions ||
-          parseInt(dist.numberOfQuestions, 10) <= 0
-      )
-    ) {
-      return "All question distributions must have a valid subject and number of questions";
+    if (formData.questionMode === "manual" && formData.manualQuestionIds.length === 0) {
+      return "Select at least one manual question";
     }
-
+    if (formData.questionMode === "distribution" && formData.questionDistribution.some((dist) => !dist.subject || !dist.numberOfQuestions || Number(dist.numberOfQuestions) <= 0)) {
+      return "All question distributions must have valid subject and count";
+    }
     return "";
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     const validationError = validateForm();
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+    if (validationError) { setError(validationError); return; }
     try {
       setSaving(true);
-
+      const payload = { ...formData, questionDistribution: formData.questionMode === "distribution" ? formData.questionDistribution : [] };
       if (isEditing) {
-        await axios.put(`${import.meta.env.VITE_API_URL}/api/exams/${editingExamId}`, formData);
+        await axios.put(`${import.meta.env.VITE_API_URL}/api/exams/${editingExamId}`, payload, authConfig);
         showToast("Exam updated successfully");
       } else {
-        await axios.post(`${import.meta.env.VITE_API_URL}/api/exams`, formData);
+        await axios.post(`${import.meta.env.VITE_API_URL}/api/exams`, payload, authConfig);
         showToast("Exam created successfully");
       }
-
       closeModal();
       fetchData();
-    } catch (err) {
-      setError(err.response?.data?.error || "Error submitting form");
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err.response?.data?.error || "Error submitting form"); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async (id) => {
-    const confirmed = window.confirm("Are you sure you want to delete this exam?");
-    if (!confirmed) return;
-
+    if (!window.confirm("Are you sure you want to delete this exam?")) return;
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/exams/${id}`);
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/exams/${id}`, authConfig);
       showToast("Exam deleted successfully");
       fetchData();
-    } catch (err) {
-      showToast("Delete failed", "error");
-    }
+    } catch (err) { showToast("Delete failed", "error"); }
   };
 
   const handleEdit = (exam) => {
@@ -202,708 +179,269 @@ const Examination = () => {
       duration: exam.duration || "",
       sessionId: exam.sessionId?._id || "",
       status: exam.status || "Scheduled",
-      questionDistribution:
-        exam.questionDistribution?.length > 0
-          ? exam.questionDistribution.map((item) => ({
-              subject: item.subject || "",
-              numberOfQuestions: item.numberOfQuestions || "",
-            }))
-          : [{ subject: "", numberOfQuestions: "" }],
+      questionMode: exam.questionMode || "distribution",
+      questionDistribution: exam.questionMode === "distribution" && exam.questionDistribution?.length ? exam.questionDistribution.map((item) => ({ subject: item.subject?._id || item.subject || "", numberOfQuestions: item.questionCount || item.numberOfQuestions || "" })) : [{ subject: "", numberOfQuestions: "" }],
+      manualQuestionIds: exam.questionMode === "manual" ? (exam.questions || []).map((item) => item._id || item) : [],
     });
-
     setEditingExamId(exam._id);
     setError("");
+    setQuestionSearch("");
     setModalOpen(true);
   };
 
   const filteredExams = useMemo(() => {
     const keyword = search.toLowerCase();
-
     return exams.filter((exam) => {
       return (
         exam.title?.toLowerCase().includes(keyword) ||
         exam.status?.toLowerCase().includes(keyword) ||
         exam.sessionId?.name?.toLowerCase().includes(keyword) ||
-        String(exam.totalMarks || "").toLowerCase().includes(keyword) ||
-        String(exam.passingMarks || "").toLowerCase().includes(keyword) ||
-        String(exam.date || "").toLowerCase().includes(keyword)
+        exam.questionMode?.toLowerCase().includes(keyword)
       );
     });
   }, [exams, search]);
 
-  const getStatusStyle = (status) => {
-    const value = String(status || "").toLowerCase();
+  const filteredManualQuestions = useMemo(() => {
+    const keyword = questionSearch.toLowerCase();
+    return questions.filter((question) => {
+      return (
+        question.question?.toLowerCase().includes(keyword) ||
+        question.subject?.subjectname?.toLowerCase().includes(keyword)
+      );
+    });
+  }, [questions, questionSearch]);
 
-    if (value === "scheduled") {
-      return { background: "#dbeafe", color: "#1d4ed8" };
-    }
-    if (value === "draft") {
-      return { background: "#fef3c7", color: "#92400e" };
-    }
-    if (value === "closed") {
-      return { background: "#fee2e2", color: "#b91c1c" };
-    }
-
-    return { background: "#e2e8f0", color: "#334155" };
+  const getStatusColor = (status) => {
+    const s = String(status || "").toLowerCase();
+    if (s === "scheduled") return { bg: "#dbeafe", text: "#1e40af" };
+    if (s === "draft") return { bg: "#fef3c7", text: "#92400e" };
+    if (s === "closed") return { bg: "#fee2e2", text: "#991b1b" };
+    return { bg: "#f1f5f9", text: "#475569" };
   };
 
   return (
-    <div
-      className="container py-4"
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
-      }}
-    >
-      {toast.show && (
-        <div
-          style={{
-            position: "fixed",
-            top: 20,
-            right: 20,
-            zIndex: 9999,
-            minWidth: "280px",
-            padding: "14px 16px",
-            borderRadius: "16px",
-            color: "#fff",
-            background:
-              toast.type === "error"
-                ? "linear-gradient(135deg,#dc2626,#ef4444)"
-                : "linear-gradient(135deg,#2563eb,#4f46e5)",
-            boxShadow: "0 12px 30px rgba(0,0,0,0.18)",
-          }}
-        >
-          <div className="d-flex justify-content-between align-items-center gap-3">
-            <span>{toast.message}</span>
-            <button
-              type="button"
-              onClick={() => setToast({ show: false, message: "", type: "success" })}
-              style={{
-                border: "none",
-                background: "transparent",
-                color: "#fff",
-                fontSize: "16px",
-              }}
-            >
-              x
-            </button>
-          </div>
-        </div>
-      )}
+    <div className="app-page">
+      <AppToast toast={toast} onClose={() => setToast({ show: false, message: "", type: "success" })} />
 
-      <div
-        className="p-4 p-md-5 mb-4 text-white"
-        style={{
-          borderRadius: "28px",
-          background: "linear-gradient(135deg, #0f172a, #1d4ed8, #4f46e5)",
-          boxShadow: "0 20px 45px rgba(37, 99, 235, 0.22)",
-        }}
-      >
-        <div className="row align-items-center g-4">
-          <div className="col-lg-8">
-            <h2 className="fw-bold mb-2">Examination Dashboard</h2>
-            <p className="mb-0" style={{ opacity: 0.88 }}>
-              Create, manage, and organize exams with a premium professional interface.
-            </p>
-          </div>
-          <div className="col-lg-4 text-lg-end">
-            <button
-              type="button"
-              onClick={openAddModal}
-              className="btn text-white"
-              style={{
-                border: "none",
-                borderRadius: "14px",
-                padding: "12px 20px",
-                fontWeight: "600",
-                background: "rgba(255,255,255,0.16)",
-                backdropFilter: "blur(8px)",
-              }}
-            >
-              + Create Exam
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="row g-4 mb-4">
-        <div className="col-md-3">
-          <div
-            className="p-4 bg-white h-100"
-            style={{ borderRadius: "22px", boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)" }}
-          >
-            <div className="text-muted mb-2">Total Exams</div>
-            <h4 className="fw-bold mb-0">{exams.length}</h4>
-          </div>
-        </div>
-
-        <div className="col-md-3">
-          <div
-            className="p-4 bg-white h-100"
-            style={{ borderRadius: "22px", boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)" }}
-          >
-            <div className="text-muted mb-2">Subjects</div>
-            <h4 className="fw-bold mb-0">{subjects.length}</h4>
-          </div>
-        </div>
-
-        <div className="col-md-3">
-          <div
-            className="p-4 bg-white h-100"
-            style={{ borderRadius: "22px", boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)" }}
-          >
-            <div className="text-muted mb-2">Sessions</div>
-            <h4 className="fw-bold mb-0">{sessions.length}</h4>
-          </div>
-        </div>
-
-        <div className="col-md-3">
-          <div
-            className="p-4 bg-white h-100"
-            style={{ borderRadius: "22px", boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)" }}
-          >
-            <div className="text-muted mb-2">Visible Records</div>
-            <h4 className="fw-bold mb-0">{filteredExams.length}</h4>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="card border-0"
-        style={{
-          borderRadius: "24px",
-          boxShadow: "0 16px 40px rgba(15, 23, 42, 0.08)",
-        }}
-      >
-        <div className="card-body p-4">
-          <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-            <div>
-              <h4 className="fw-bold mb-1">Examination Records</h4>
-              <p className="text-muted mb-0">
-                Search, edit and manage all examinations.
+      <div className="container">
+        <div className="app-hero mb-4">
+          <div className="row align-items-center g-4">
+            <div className="col-lg-8">
+              <h2 className="fw-bold mb-2">Examination Command Center</h2>
+              <p className="mb-0" style={{ opacity: 0.88 }}>
+                Configure random distribution exams or manually curated assessments.
               </p>
             </div>
-
-            <div style={{ minWidth: "240px", position: "relative" }}>
-              <span
-                style={{
-                  position: "absolute",
-                  left: "14px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#64748b",
-                }}
-              >
-                🔍
-              </span>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Search examinations..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  borderRadius: "14px",
-                  padding: "12px 14px 12px 40px",
-                  border: "1px solid #dbe3f0",
-                }}
-              />
+            <div className="col-lg-4 text-lg-end">
+              <button type="button" onClick={openAddModal} className="app-btn-primary">
+                <FiPlus className="me-2" /> Create New Exam
+              </button>
             </div>
           </div>
+        </div>
 
-          <div className="d-none d-md-block table-responsive">
-            <table className="table align-middle">
-              <thead>
-                <tr style={{ color: "#475569" }}>
-                  <th>#</th>
-                  <th>Exam Name</th>
-                  <th>Total</th>
-                  <th>Passing</th>
-                  <th>Date</th>
-                  <th>Time</th>
-                  <th>Duration</th>
-                  <th>Session</th>
-                  <th>Status</th>
-                  <th className="text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fetching ? (
-                  <tr>
-                    <td colSpan="10" className="text-center py-5">
-                      Loading examinations...
-                    </td>
-                  </tr>
-                ) : filteredExams.length === 0 ? (
-                  <tr>
-                    <td colSpan="10" className="text-center py-5 text-muted">
-                      No examinations found.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredExams.map((exam, index) => (
-                    <tr key={exam._id}>
-                      <td>{index + 1}</td>
-                      <td className="fw-semibold">{exam.title}</td>
-                      <td>{exam.totalMarks}</td>
-                      <td>{exam.passingMarks}</td>
-                      <td>{exam.date}</td>
-                      <td>{exam.time}</td>
-                      <td>{exam.duration} min</td>
-                      <td>{exam.sessionId?.name || "N/A"}</td>
-                      <td>
-                        <span
-                          style={{
-                            ...getStatusStyle(exam.status),
-                            display: "inline-block",
-                            padding: "6px 12px",
-                            borderRadius: "999px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                          }}
-                        >
-                          {exam.status}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <button
-                          type="button"
-                          className="btn btn-sm text-white me-2"
-                          onClick={() => handleEdit(exam)}
-                          style={{
-                            border: "none",
-                            borderRadius: "10px",
-                            padding: "8px 14px",
-                            background: "linear-gradient(135deg, #0284c7, #2563eb)",
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={() => handleDelete(exam._id)}
-                          style={{
-                            borderRadius: "10px",
-                            padding: "8px 14px",
-                            background: "#fff1f2",
-                            color: "#be123c",
-                            border: "1px solid #fecdd3",
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="row g-4 mb-4">
+          {fetching ? (
+            <SkeletonStats count={4} />
+          ) : (
+            <>
+              <div className="col-md-3"><div className="app-stat-card"><div className="app-label-muted">Total Exams</div><h4 className="fw-bold mb-0">{exams.length}</h4></div></div>
+              <div className="col-md-3"><div className="app-stat-card"><div className="app-label-muted">Question Pool</div><h4 className="fw-bold mb-0">{questions.length}</h4></div></div>
+              <div className="col-md-3"><div className="app-stat-card"><div className="app-label-muted">Curriculums</div><h4 className="fw-bold mb-0">{subjects.length}</h4></div></div>
+              <div className="col-md-3"><div className="app-stat-card"><div className="app-label-muted">Active Sessions</div><h4 className="fw-bold mb-0">{sessions.length}</h4></div></div>
+            </>
+          )}
+        </div>
 
-          <div className="d-block d-md-none">
-            {fetching ? (
-              <div className="text-center py-4">Loading examinations...</div>
-            ) : filteredExams.length === 0 ? (
-              <div className="text-center py-4 text-muted">No examinations found.</div>
-            ) : (
-              <div className="row g-3">
-                {filteredExams.map((exam, index) => (
-                  <div className="col-12" key={exam._id}>
-                    <div
-                      className="p-3 bg-white"
-                      style={{
-                        borderRadius: "18px",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 8px 20px rgba(15, 23, 42, 0.06)",
-                      }}
-                    >
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <strong>#{index + 1}</strong>
-                        <span
-                          style={{
-                            ...getStatusStyle(exam.status),
-                            display: "inline-block",
-                            padding: "6px 12px",
-                            borderRadius: "999px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                          }}
-                        >
-                          {exam.status}
-                        </span>
-                      </div>
-
-                      <div className="fw-semibold mb-2">{exam.title}</div>
-                      <div className="text-muted small mb-1">Session: {exam.sessionId?.name || "N/A"}</div>
-                      <div className="text-muted small mb-1">Date: {exam.date}</div>
-                      <div className="text-muted small mb-1">Time: {exam.time}</div>
-                      <div className="text-muted small mb-1">Duration: {exam.duration} min</div>
-                      <div className="text-muted small mb-1">Total Marks: {exam.totalMarks}</div>
-                      <div className="text-muted small mb-3">Passing Marks: {exam.passingMarks}</div>
-
-                      <div className="d-flex gap-2">
-                        <button
-                          type="button"
-                          className="btn btn-sm text-white w-50"
-                          onClick={() => handleEdit(exam)}
-                          style={{
-                            border: "none",
-                            borderRadius: "10px",
-                            padding: "10px 14px",
-                            background: "linear-gradient(135deg, #0284c7, #2563eb)",
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm w-50"
-                          onClick={() => handleDelete(exam._id)}
-                          style={{
-                            borderRadius: "10px",
-                            padding: "10px 14px",
-                            background: "#fff1f2",
-                            color: "#be123c",
-                            border: "1px solid #fecdd3",
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        <div className="app-panel">
+          <div className="card-body p-4">
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+              <div><h4 className="fw-bold mb-1">Examination Records</h4><p className="text-muted small">Track and manage upcoming and past academic assessments.</p></div>
+              <div className="app-search" style={{ minWidth: 320 }}>
+                <FiSearch className="app-search__icon" />
+                <input type="text" className="form-control app-input" placeholder="Filter exams..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
-            )}
+            </div>
+
+            <div className="d-none d-md-block table-responsive">
+              <table className="table align-middle">
+                <thead><tr style={{ color: "#475569" }}><th>#</th><th>EXAM TITLE</th><th>STRATEGY</th><th>STATS</th><th>STATUS</th><th className="text-end">ACTION</th></tr></thead>
+                <tbody>
+                  {fetching ? (
+                    <tr><td colSpan="6" className="p-0 border-0"><SkeletonTable rows={5} cols={6} /></td></tr>
+                  ) : filteredExams.length === 0 ? (
+                    <tr><td colSpan="6" className="text-center py-5 text-muted">No examinations scheduled yet.</td></tr>
+                  ) : (
+                    filteredExams.map((e, index) => {
+                      const status = getStatusColor(e.status);
+                      return (
+                        <tr key={e._id || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td className="fw-bold text-muted small">{index + 1}</td>
+                          <td style={{ minWidth: 220 }}><div className="fw-bold text-dark">{e.title}</div><div className="small text-muted"><FiCalendar className="me-1" style={{ display: 'inline' }} />{e.date} • <FiClock className="me-1" style={{ display: 'inline' }} />{e.time}</div></td>
+                          <td><span style={{ background: e.questionMode === 'manual' ? '#dcfce7' : '#dbeafe', color: e.questionMode === 'manual' ? '#166534' : '#1e40af', padding: '4px 10px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>{e.questionMode}</span></td>
+                          <td><div className="fw-bold">{e.totalMarks} <span className="small text-muted fw-normal">Marks</span></div><div className="small text-muted">{e.duration} Mins</div></td>
+                          <td><span className="app-badge" style={{ background: status.bg, color: status.text }}>{e.status}</span></td>
+                          <td className="text-end">
+                            <div className="d-flex justify-content-end gap-2">
+                              <button className="app-btn-edit" onClick={() => handleEdit(e)}><FiEdit3 /></button>
+                              <button className="app-btn-delete" onClick={() => handleDelete(e._id)}><FiTrash2 /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="d-block d-md-none">
+              {fetching ? (
+                <div className="text-center py-4">Loading...</div>
+              ) : filteredExams.length === 0 ? (
+                <div className="text-center py-4 text-muted">No exams found.</div>
+              ) : (
+                <div className="row g-3">
+                  {filteredExams.map((e, index) => {
+                    const status = getStatusColor(e.status);
+                    return (
+                      <div className="col-12" key={e._id || index}>
+                        <div className="app-mobile-card">
+                          <strong>#{index + 1} - {e.title}</strong>
+                          <div className="text-muted small mt-1">{e.date} • {e.time}</div>
+                          <div className="d-flex justify-content-between align-items-center mt-2">
+                            <span style={{ background: status.bg, color: status.text, padding: '4px 10px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600 }}>{e.status}</span>
+                            <div className="d-flex gap-2">
+                              <button className="app-btn-edit" onClick={() => handleEdit(e)}><FiEdit3 /></button>
+                              <button className="app-btn-delete" onClick={() => handleDelete(e._id)}><FiTrash2 /></button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {modalOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9998,
-            padding: "16px",
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: "900px",
-              background: "#fff",
-              borderRadius: "24px",
-              overflow: "hidden",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
-            }}
-          >
-            <div
-              className="d-flex justify-content-between align-items-center"
-              style={{
-                padding: "20px 24px",
-                color: "#fff",
-                background: isEditing
-                  ? "linear-gradient(135deg, #7c3aed, #4338ca)"
-                  : "linear-gradient(135deg, #0f172a, #2563eb)",
-              }}
-            >
-              <div>
-                <h4 className="fw-bold mb-1">
-                  {isEditing ? "Edit Examination" : "Create Examination"}
-                </h4>
-                <p className="mb-0" style={{ opacity: 0.8 }}>
-                  Fill exam details and configure question distribution.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                style={{
-                  border: "none",
-                  background: "rgba(255,255,255,0.16)",
-                  color: "#fff",
-                  width: "38px",
-                  height: "38px",
-                  borderRadius: "10px",
-                }}
-              >
-                x
-              </button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", backdropFilter: 'blur(8px)', display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: 20 }}>
+          <div className="app-panel" style={{ width: "100%", maxWidth: 1000, padding: 0, overflow: "hidden", maxHeight: '90vh' }}>
+            <div className="d-flex justify-content-between align-items-center p-4" style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <div><h4 className="fw-bold mb-0">{isEditing ? "Modify Examination" : "New Assessment Strategy"}</h4><p className="mb-0 small text-muted">Configure parameters for the upcoming exam session.</p></div>
+              <button type="button" onClick={closeModal} className="btn-close"></button>
             </div>
-
-            <div className="p-4">
-              {error && (
-                <div className="alert alert-danger" style={{ borderRadius: "14px" }}>
-                  {error}
-                </div>
-              )}
-
+            <div className="p-4 overflow-auto" style={{ maxHeight: 'calc(90vh - 100px)' }}>
+              {error && <div className="alert alert-danger rounded-3 py-2 small fw-bold mb-4">{error}</div>}
               <form onSubmit={handleSubmit}>
-                <div className="row g-3 mb-3">
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold">Exam Name</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }}>📝</span>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="examName"
-                        value={formData.examName}
-                        onChange={handleChange}
-                        placeholder="Exam name"
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold">Total Marks</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }}>#</span>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="totalMarks"
-                        value={formData.totalMarks}
-                        onChange={handleChange}
-                        min="1"
-                        placeholder="Total marks"
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold">Passing Marks</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }}>✔</span>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="passingMarks"
-                        value={formData.passingMarks}
-                        onChange={handleChange}
-                        min="1"
-                        placeholder="Passing marks"
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="row g-3 mb-3">
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold">Date</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }}>📅</span>
-                      <input
-                        type="date"
-                        className="form-control"
-                        name="date"
-                        value={formData.date}
-                        onChange={handleChange}
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold">Time</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }}>⏰</span>
-                      <input
-                        type="time"
-                        className="form-control"
-                        name="time"
-                        value={formData.time}
-                        onChange={handleChange}
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold">Duration</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }}>⏳</span>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="duration"
-                        value={formData.duration}
-                        onChange={handleChange}
-                        min="1"
-                        placeholder="Duration in minutes"
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
                 <div className="row g-3 mb-4">
                   <div className="col-md-6">
-                    <label className="form-label fw-semibold">Session</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b", zIndex: 1 }}>📚</span>
-                      <select
-                        className="form-select"
-                        name="sessionId"
-                        value={formData.sessionId}
-                        onChange={handleChange}
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      >
-                        <option value="">Select Session</option>
-                        {sessions.map((s) => (
-                          <option key={s._id} value={s._id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
+                    <label className="form-label fw-bold small text-uppercase">Exam Title</label>
+                    <div className="app-input-wrap">
+                      <input className="form-control app-input" name="examName" value={formData.examName} onChange={handleChange} required />
                     </div>
                   </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label fw-semibold">Status</label>
-                    <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b", zIndex: 1 }}>🏷</span>
-                      <select
-                        className="form-select"
-                        name="status"
-                        value={formData.status}
-                        onChange={handleChange}
-                        style={{ borderRadius: "14px", padding: "12px 14px 12px 40px", border: "1px solid #dbe3f0" }}
-                      >
-                        <option value="Scheduled">Scheduled</option>
-                        <option value="Draft">Draft</option>
-                        <option value="Closed">Closed</option>
-                      </select>
+                  <div className="col-md-3">
+                    <label className="form-label fw-bold small text-uppercase">Total Marks</label>
+                    <div className="app-input-wrap">
+                      <input type="number" className="form-control app-input" name="totalMarks" value={formData.totalMarks} onChange={handleChange} required />
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <label className="form-label fw-bold small text-uppercase">Passing Marks</label>
+                    <div className="app-input-wrap">
+                      <input type="number" className="form-control app-input" name="passingMarks" value={formData.passingMarks} onChange={handleChange} required />
+                    </div>
+                  </div>
+                </div>
+                <div className="row g-3 mb-4">
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold small text-uppercase">Date</label>
+                    <div className="app-input-wrap">
+                      <input type="date" className="form-control app-input" name="date" value={formData.date} onChange={handleChange} required />
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold small text-uppercase">Time</label>
+                    <div className="app-input-wrap">
+                      <input type="time" className="form-control app-input" name="time" value={formData.time} onChange={handleChange} required />
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold small text-uppercase">Duration (Mins)</label>
+                    <div className="app-input-wrap">
+                      <input type="number" className="form-control app-input" name="duration" value={formData.duration} onChange={handleChange} required />
+                    </div>
+                  </div>
+                </div>
+                <div className="row g-3 mb-4">
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold small text-uppercase">Academic Session</label>
+                    <div className="app-input-wrap">
+                      <select className="form-select app-input" name="sessionId" value={formData.sessionId} onChange={handleChange} required><option value="">Select</option>{sessions.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}</select>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold small text-uppercase">Lifecycle State</label>
+                    <div className="app-input-wrap">
+                      <select className="form-select app-input" name="status" value={formData.status} onChange={handleChange}><option value="Scheduled">Scheduled</option><option value="Draft">Draft</option><option value="Closed">Closed</option></select>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold small text-uppercase">Curating Strategy</label>
+                    <div className="app-input-wrap">
+                      <select className="form-select app-input" name="questionMode" value={formData.questionMode} onChange={handleChange}><option value="distribution">Distribution</option><option value="manual">Manual Selection</option></select>
                     </div>
                   </div>
                 </div>
 
-                <div
-                  className="p-3 mb-4"
-                  style={{
-                    borderRadius: "18px",
-                    background: "#f8fbff",
-                    border: "1px solid #dbeafe",
-                  }}
-                >
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5 className="fw-bold mb-0" style={{ color: "#1d4ed8" }}>
-                      Question Distribution
-                    </h5>
-                    <button
-                      type="button"
-                      className="btn btn-sm text-white"
-                      onClick={addDistributionField}
-                      style={{
-                        border: "none",
-                        borderRadius: "10px",
-                        padding: "8px 14px",
-                        background: "linear-gradient(135deg, #2563eb, #4f46e5)",
-                      }}
-                    >
-                      + Add Subject
-                    </button>
+                {formData.questionMode === "distribution" ? (
+                  <div className="p-4 mb-4" style={{ background: '#f8fbff', borderRadius: 12, border: '1px dashed #3b82f6' }}>
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <h6 className="fw-bold mb-0"><FiLayers className="me-2" style={{ display: 'inline' }} />Randomized Strategy</h6>
+                      <button type="button" className="app-btn-primary" style={{ fontSize: '0.85rem', padding: '6px 12px' }} onClick={addDistributionField}>+ Add Subject</button>
+                    </div>
+                    {formData.questionDistribution.map((item, index) => (
+                      <div className="row g-3 mb-2" key={index}>
+                        <div className="col-md-7">
+                          <div className="app-input-wrap">
+                            <select className="form-select app-input" name="subject" value={item.subject} onChange={(e) => handleQuestionDistChange(index, e)}><option value="">Select Subject</option>{subjects.map(s => <option key={s._id} value={s._id}>{s.subjectname}</option>)}</select>
+                          </div>
+                        </div>
+                        <div className="col-md-3">
+                          <div className="app-input-wrap">
+                            <input type="number" className="form-control app-input" name="numberOfQuestions" placeholder="Count" value={item.numberOfQuestions} onChange={(e) => handleQuestionDistChange(index, e)} />
+                          </div>
+                        </div>
+                        <div className="col-md-2"><button type="button" className="app-btn-delete w-100" onClick={() => removeDistributionField(index)}><FiTrash2 /></button></div>
+                      </div>
+                    ))}
                   </div>
-
-                  {formData.questionDistribution.map((item, index) => (
-                    <div className="row g-3 mb-3" key={index}>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">Subject</label>
-                        <select
-                          className="form-select"
-                          name="subject"
-                          value={item.subject}
-                          onChange={(e) => handleQuestionDistChange(index, e)}
-                          style={{ borderRadius: "14px", padding: "12px 14px", border: "1px solid #dbe3f0" }}
-                        >
-                          <option value="">Select Subject</option>
-                          {subjects.map((sub) => (
-                            <option key={sub._id} value={sub._id}>
-                              {sub.subjectname}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="col-md-4">
-                        <label className="form-label fw-semibold">No. of Questions</label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          name="numberOfQuestions"
-                          value={item.numberOfQuestions}
-                          onChange={(e) => handleQuestionDistChange(index, e)}
-                          min="1"
-                          placeholder="Number of questions"
-                          style={{ borderRadius: "14px", padding: "12px 14px", border: "1px solid #dbe3f0" }}
-                        />
-                      </div>
-
-                      <div className="col-md-2 d-flex align-items-end">
-                        <button
-                          type="button"
-                          className="btn w-100"
-                          onClick={() => removeDistributionField(index)}
-                          style={{
-                            borderRadius: "12px",
-                            padding: "12px 14px",
-                            background: "#fff1f2",
-                            color: "#be123c",
-                            border: "1px solid #fecdd3",
-                          }}
-                        >
-                          Remove
-                        </button>
+                ) : (
+                  <div className="p-4 mb-4" style={{ background: '#f0fdf4', borderRadius: 12, border: '1px dashed #22c55e' }}>
+                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                      <h6 className="fw-bold mb-0"><FiLayers className="me-2" style={{ display: 'inline' }} />Curated Manual Strategy ({formData.manualQuestionIds.length} Selected)</h6>
+                      <div className="app-input-wrap" style={{ maxWidth: 260 }}>
+                        <input type="text" className="form-control app-input" placeholder="Search pool..." value={questionSearch} onChange={(e) => setQuestionSearch(e.target.value)} />
                       </div>
                     </div>
-                  ))}
-                </div>
+                    <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                      {filteredManualQuestions.map(q => (
+                        <div key={q._id} className="p-3 bg-white border rounded-2 mb-2 d-flex gap-3">
+                          <input type="checkbox" checked={formData.manualQuestionIds.includes(q._id)} onChange={() => toggleManualQuestion(q._id)} />
+                          <div><div className="fw-bold small">{q.question}</div><div className="small text-muted">{q.subject?.subjectname}</div></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                <div className="d-flex flex-wrap gap-2">
-                  <button
-                    type="submit"
-                    className="btn text-white"
-                    disabled={saving}
-                    style={{
-                      border: "none",
-                      borderRadius: "14px",
-                      padding: "12px 20px",
-                      fontWeight: "600",
-                      background: "linear-gradient(135deg, #2563eb, #4f46e5)",
-                    }}
-                  >
-                    {saving
-                      ? "Saving..."
-                      : isEditing
-                      ? "Update Exam"
-                      : "Create Exam"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="btn"
-                    style={{
-                      borderRadius: "14px",
-                      padding: "12px 20px",
-                      fontWeight: "600",
-                      background: "#eef2ff",
-                      color: "#3730a3",
-                      border: "1px solid #c7d2fe",
-                    }}
-                  >
-                    Cancel
-                  </button>
+                <div className="d-flex gap-3 pt-3">
+                  <button type="submit" className="app-btn-primary flex-grow-1" disabled={saving}>{saving ? "Processing..." : isEditing ? "Modify Assessment" : "Deploy Assessment"}</button>
+                  <button type="button" onClick={closeModal} className="app-btn-soft">Cancel</button>
                 </div>
               </form>
             </div>

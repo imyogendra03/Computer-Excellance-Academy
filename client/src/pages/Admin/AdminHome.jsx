@@ -3,12 +3,14 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import {
   FiBookOpen,
-  FiCalendar,
   FiClipboard,
   FiLayers,
   FiSearch,
   FiUsers,
 } from "react-icons/fi";
+import { SkeletonTable, SkeletonStats } from "../../components/ui/SkeletonLoader";
+import AppToast from "../../components/ui/AppToast";
+import "../../components/ui/app-ui.css";
 
 const AdminHome = () => {
   const navigate = useNavigate();
@@ -36,12 +38,12 @@ const AdminHome = () => {
   const fetchDashboard = async () => {
     try {
       setLoading(true);
-
+      const token = localStorage.getItem("adminToken");
+      const config = { headers: { Authorization: `Bearer ${token}` } };
       const [dashboardRes, examsRes] = await Promise.all([
-        axios.get(`${import.meta.env.VITE_API_URL}/api/dashboard/`),
-        axios.get(`${import.meta.env.VITE_API_URL}/api/exams/exams`),
+        axios.get(`${import.meta.env.VITE_API_URL}/api/dashboard/`, config),
+        axios.get(`${import.meta.env.VITE_API_URL}/api/exams/exams`, config),
       ]);
-
       setDashboard(dashboardRes?.data || {});
       setExams(examsRes?.data || []);
     } catch (error) {
@@ -73,7 +75,6 @@ const AdminHome = () => {
 
   const filteredExams = useMemo(() => {
     const keyword = search.toLowerCase();
-
     return exams.filter((exam) => {
       return (
         exam.title?.toLowerCase().includes(keyword) ||
@@ -91,461 +92,166 @@ const AdminHome = () => {
 
   const getStatusStyle = (status) => {
     const value = String(status || "").toLowerCase();
-
-    if (value === "scheduled") {
-      return { background: "#dbeafe", color: "#1d4ed8" };
-    }
-    if (value === "draft") {
-      return { background: "#fef3c7", color: "#92400e" };
-    }
-    if (value === "closed") {
-      return { background: "#fee2e2", color: "#b91c1c" };
-    }
-
+    if (value === "scheduled") return { background: "#dbeafe", color: "#1d4ed8" };
+    if (value === "draft") return { background: "#fef3c7", color: "#92400e" };
+    if (value === "closed") return { background: "#fee2e2", color: "#b91c1c" };
     return { background: "#e2e8f0", color: "#334155" };
   };
 
   return (
-    <>
-      <style>{`
-        .home-page {
-          min-height: 100vh;
-          padding: 24px 0;
-          background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
-        }
+    <div className="app-page">
+      <AppToast toast={toast} onClose={() => setToast({ show: false, message: "", type: "success" })} />
 
-        .home-hero {
-          padding: 32px;
-          border-radius: 28px;
-          color: #fff;
-          background: linear-gradient(135deg, #0f172a, #1d4ed8, #4f46e5);
-          box-shadow: 0 20px 45px rgba(37, 99, 235, 0.22);
-        }
-
-        .home-hero-stat {
-          display: inline-block;
-          padding: 16px 20px;
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.14);
-          backdrop-filter: blur(8px);
-        }
-
-        .home-stat-card {
-          height: 100%;
-          padding: 24px;
-          background: #fff;
-          border-radius: 22px;
-          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-        }
-
-        .home-panel {
-          background: #fff;
-          border-radius: 24px;
-          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-          border: 0;
-        }
-
-        .home-search {
-          position: relative;
-          min-width: 240px;
-        }
-
-        .home-search-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #64748b;
-        }
-
-        .home-input {
-          width: 100%;
-          border: 1px solid #dbe3f0;
-          border-radius: 14px;
-          padding: 12px 14px 12px 40px;
-          outline: none;
-        }
-
-        .home-input:focus,
-        .home-select:focus {
-          border-color: #7c3aed;
-          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08);
-        }
-
-        .home-select {
-          min-width: 130px;
-          border: 1px solid #dbe3f0;
-          border-radius: 14px;
-          padding: 12px 14px;
-          outline: none;
-        }
-
-        .home-badge {
-          display: inline-block;
-          padding: 6px 12px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .home-mobile-card {
-          padding: 16px;
-          background: #fff;
-          border-radius: 18px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-        }
-
-        .home-btn-primary {
-          border: none;
-          color: #fff;
-          font-weight: 600;
-          border-radius: 14px;
-          padding: 10px 18px;
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
-        }
-
-        .home-btn-soft {
-          border-radius: 14px;
-          padding: 10px 18px;
-          font-weight: 600;
-          background: #eef2ff;
-          color: #3730a3;
-          border: 1px solid #c7d2fe;
-        }
-
-        .home-quick-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 18px;
-          margin-bottom: 24px;
-        }
-
-        .home-quick-card {
-          padding: 22px;
-          border-radius: 22px;
-          background: #ffffff;
-          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
-          border: 1px solid #e8ecf6;
-          transition: 0.25s ease;
-          cursor: pointer;
-        }
-
-        .home-quick-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 18px 36px rgba(15, 23, 42, 0.1);
-        }
-
-        .home-quick-icon {
-          width: 52px;
-          height: 52px;
-          border-radius: 16px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 14px;
-          font-size: 22px;
-          color: #fff;
-        }
-
-        .home-quick-title {
-          font-size: 18px;
-          font-weight: 700;
-          color: #0f172a;
-          margin-bottom: 8px;
-        }
-
-        .home-quick-desc {
-          margin: 0;
-          color: #64748b;
-          font-size: 14px;
-          line-height: 1.7;
-        }
-
-        .home-toast {
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          z-index: 9999;
-          min-width: 280px;
-          color: #fff;
-          padding: 14px 16px;
-          border-radius: 16px;
-          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .home-toast.success {
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
-        }
-
-        .home-toast.error {
-          background: linear-gradient(135deg, #dc2626, #ef4444);
-        }
-
-        .home-toast-close {
-          border: none;
-          background: transparent;
-          color: #fff;
-          font-size: 16px;
-        }
-
-        @media (max-width: 767px) {
-          .home-hero {
-            padding: 24px;
-          }
-
-          .home-quick-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-
-      <div className="home-page">
-        <div className="container">
-          {toast.show && (
-            <div className={`home-toast ${toast.type === "error" ? "error" : "success"}`}>
-              <span>{toast.message}</span>
-              <button
-                type="button"
-                className="home-toast-close"
-                onClick={() => setToast({ show: false, message: "", type: "success" })}
-              >
-                x
-              </button>
-            </div>
-          )}
-
-          <div className="home-hero mb-4">
-            <div className="row align-items-center g-4">
-              <div className="col-lg-8">
-                <h2 className="fw-bold mb-2">Dashboard Overview</h2>
-                <p className="mb-0" style={{ opacity: 0.88 }}>
-                  Monitor exams, users, and upcoming learning modules from one professional admin dashboard.
-                </p>
-              </div>
-
-              <div className="col-lg-4 text-lg-end">
-                <div className="home-hero-stat">
-                  <div style={{ fontSize: "13px", opacity: 0.8 }}>Welcome</div>
-                  <div className="fw-bold" style={{ fontSize: "24px" }}>
-                    Admin
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="home-quick-grid">
-            <div
-              className="home-quick-card"
-              onClick={() => showToast("Courses page route will be connected next.", "success")}
-            >
-              <div
-                className="home-quick-icon"
-                style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}
-              >
-                <FiBookOpen />
-              </div>
-              <div className="home-quick-title">Course Management</div>
-              <p className="home-quick-desc">
-                Add, update, publish, and organize all public courses from one place.
-              </p>
-            </div>
-
-            <div
-              className="home-quick-card"
-              onClick={() => showToast("Batches page route will be connected next.", "success")}
-            >
-              <div
-                className="home-quick-icon"
-                style={{ background: "linear-gradient(135deg, #2563eb, #06b6d4)" }}
-              >
-                <FiLayers />
-              </div>
-              <div className="home-quick-title">Batch Management</div>
-              <p className="home-quick-desc">
-                Create paid batches, set price, manage visibility, and prepare learner access.
+      <div className="container">
+        <div className="app-hero mb-4">
+          <div className="row align-items-center g-4">
+            <div className="col-lg-8">
+              <h2 className="fw-bold mb-2">Dashboard Intelligence</h2>
+              <p className="mb-0" style={{ opacity: 0.88 }}>
+                Command center for your academy. Manage content, monitor students, and track academic performance at scale.
               </p>
             </div>
           </div>
+        </div>
 
+        <div className="row g-4 mb-4">
+          <div className="col-md-3" onClick={() => navigate("/admin/courses")} style={{ cursor: 'pointer' }}>
+            <div className="app-stat-card" style={{ display: 'flex', gap: 15, alignItems: 'center', padding: '1.25rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: "#ede9fe", color: "#7c3aed", fontSize: '1.3rem' }}><FiBookOpen /></div>
+              <div><h6 className="fw-bold mb-0">Courses</h6><p className="text-muted small mb-0">Manage catalog</p></div>
+            </div>
+          </div>
+          <div className="col-md-3" onClick={() => navigate("/admin/batches")} style={{ cursor: 'pointer' }}>
+            <div className="app-stat-card" style={{ display: 'flex', gap: 15, alignItems: 'center', padding: '1.25rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: "#dbeafe", color: "#2563eb", fontSize: '1.3rem' }}><FiLayers /></div>
+              <div><h6 className="fw-bold mb-0">Batches</h6><p className="text-muted small mb-0">Enrollments</p></div>
+            </div>
+          </div>
+          <div className="col-md-3" onClick={() => navigate("/admin/examinee")} style={{ cursor: 'pointer' }}>
+            <div className="app-stat-card" style={{ display: 'flex', gap: 15, alignItems: 'center', padding: '1.25rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: "#d1fae5", color: "#10b981", fontSize: '1.3rem' }}><FiUsers /></div>
+              <div><h6 className="fw-bold mb-0">Registry</h6><p className="text-muted small mb-0">User profiles</p></div>
+            </div>
+          </div>
+          <div className="col-md-3" onClick={() => navigate("/admin/payments")} style={{ cursor: 'pointer' }}>
+            <div className="app-stat-card" style={{ display: 'flex', gap: 15, alignItems: 'center', padding: '1.25rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: "#fef3c7", color: "#d97706", fontSize: '1.3rem' }}>₹</div>
+              <div><h6 className="fw-bold mb-0">Revenue</h6><p className="text-muted small mb-0">Check payments</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="row g-4 mb-4">
           {loading ? (
-            <div className="home-panel p-5 text-center">Loading dashboard...</div>
+            <SkeletonStats count={3} />
           ) : (
             <>
-              <div className="row g-4 mb-4">
-                <div className="col-md-4">
-                  <div className="home-stat-card">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <FiClipboard color="#4f46e5" />
-                      <div className="text-muted">Total Exams</div>
-                    </div>
+              <div className="col-md-4">
+                <div className="app-stat-card">
+                  <div className="app-label-muted">EXAMINATIONS</div>
+                  <div className="d-flex align-items-center justify-content-between">
                     <h4 className="fw-bold mb-0">{dashboard.totalExams || 0}</h4>
-                  </div>
-                </div>
-
-                <div className="col-md-4">
-                  <div className="home-stat-card">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <FiUsers color="#16a34a" />
-                      <div className="text-muted">Total Examinees</div>
-                    </div>
-                    <h4 className="fw-bold mb-0">{dashboard.totalExaminees || 0}</h4>
-                  </div>
-                </div>
-
-                <div className="col-md-4">
-                  <div className="home-stat-card">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <FiBookOpen color="#f59e0b" />
-                      <div className="text-muted">Total Subjects</div>
-                    </div>
-                    <h4 className="fw-bold mb-0">{dashboard.totalSubject || 0}</h4>
+                    <FiClipboard size={26} color="#4f46e5" opacity={0.4} />
                   </div>
                 </div>
               </div>
-
-              <div className="home-panel">
-                <div className="card-body p-4">
-                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-                    <div>
-                      <h4 className="fw-bold mb-1">Recent Exams</h4>
-                      <p className="text-muted mb-0">
-                        Search and review the latest exam records.
-                      </p>
-                    </div>
-
-                    <div className="d-flex flex-wrap gap-2">
-                      <div className="home-search">
-                        <FiSearch className="home-search-icon" />
-                        <input
-                          type="text"
-                          className="home-input"
-                          placeholder="Search exams..."
-                          value={search}
-                          onChange={(e) => setSearch(e.target.value)}
-                        />
-                      </div>
-
-                      <select
-                        value={perPage}
-                        onChange={(e) => setPerPage(Number(e.target.value))}
-                        className="home-select"
-                      >
-                        <option value={5}>5 / page</option>
-                        <option value={10}>10 / page</option>
-                        <option value={20}>20 / page</option>
-                      </select>
-                    </div>
+              <div className="col-md-4">
+                <div className="app-stat-card">
+                  <div className="app-label-muted">ACTIVE LEARNERS</div>
+                  <div className="d-flex align-items-center justify-content-between">
+                    <h4 className="fw-bold mb-0">{dashboard.totalExaminees || 0}</h4>
+                    <FiUsers size={26} color="#10b981" opacity={0.4} />
                   </div>
-
-                  <div className="d-none d-md-block table-responsive">
-                    <table className="table align-middle">
-                      <thead>
-                        <tr style={{ color: "#475569" }}>
-                          <th>#</th>
-                          <th>Exam Name</th>
-                          <th>Date</th>
-                          <th>Status</th>
-                          <th>Total Marks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentExams.length === 0 ? (
-                          <tr>
-                            <td colSpan="5" className="text-center py-5 text-muted">
-                              No exams found.
-                            </td>
-                          </tr>
-                        ) : (
-                          currentExams.map((item, index) => (
-                            <tr key={item._id || index}>
-                              <td>{indexOfFirst + index + 1}</td>
-                              <td className="fw-semibold">{item.title}</td>
-                              <td>{formatDate(item.date)}</td>
-                              <td>
-                                <span
-                                  className="home-badge"
-                                  style={getStatusStyle(item.status)}
-                                >
-                                  {item.status}
-                                </span>
-                              </td>
-                              <td>{item.totalMarks}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="d-block d-md-none">
-                    {currentExams.length === 0 ? (
-                      <div className="text-center py-4 text-muted">No exams found.</div>
-                    ) : (
-                      <div className="row g-3">
-                        {currentExams.map((item, index) => (
-                          <div className="col-12" key={item._id || index}>
-                            <div className="home-mobile-card">
-                              <div className="d-flex justify-content-between align-items-start mb-2">
-                                <strong>#{indexOfFirst + index + 1}</strong>
-                                <span
-                                  className="home-badge"
-                                  style={getStatusStyle(item.status)}
-                                >
-                                  {item.status}
-                                </span>
-                              </div>
-
-                              <div className="fw-semibold mb-2">{item.title}</div>
-                              <div className="text-muted small mb-1">
-                                Date: {formatDate(item.date)}
-                              </div>
-                              <div className="text-muted small">
-                                Total Marks: {item.totalMarks}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="d-flex flex-wrap justify-content-between align-items-center mt-4 gap-3">
-                    <div className="text-muted">
-                      Page {currentPage} of {totalPages}
-                    </div>
-
-                    <div className="d-flex gap-2">
-                      <button
-                        type="button"
-                        className="home-btn-soft"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage((prev) => prev - 1)}
-                      >
-                        Previous
-                      </button>
-
-                      <button
-                        type="button"
-                        className="home-btn-primary"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage((prev) => prev + 1)}
-                      >
-                        Next
-                      </button>
-                    </div>
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="app-stat-card">
+                  <div className="app-label-muted">ACADEMIC SUBJECTS</div>
+                  <div className="d-flex align-items-center justify-content-between">
+                    <h4 className="fw-bold mb-0">{dashboard.totalSubject || 0}</h4>
+                    <FiBookOpen size={26} color="#f59e0b" opacity={0.4} />
                   </div>
                 </div>
               </div>
             </>
           )}
         </div>
+
+        <div className="app-panel">
+          <div className="card-body p-4">
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+              <div><h4 className="fw-bold mb-1">Recent Examinations</h4><p className="text-muted small">Real-time status of all active and upcoming tests.</p></div>
+              <div className="d-flex flex-wrap gap-2">
+                <div className="app-search" style={{ minWidth: 240 }}>
+                  <FiSearch className="app-search__icon" />
+                  <input type="text" className="form-control app-input" placeholder="Search exams..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="form-select border-0 bg-light" style={{ width: "130px", borderRadius: "14px", fontWeight: 600 }}>
+                  <option value={5}>5 / page</option><option value={10}>10 / page</option><option value={20}>20 / page</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="d-none d-md-block table-responsive">
+              <table className="table table-hover align-middle">
+                <thead><tr style={{ color: "#475569" }}><th>#</th><th>EXAM TITLE</th><th>DATE</th><th className="text-center">STATUS</th><th className="text-end">MARKS</th></tr></thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan="5" className="p-0 border-0"><SkeletonTable rows={5} cols={5} /></td></tr>
+                  ) : currentExams.length === 0 ? (
+                    <tr><td colSpan="5" className="text-center py-5 text-muted">No intelligence matches your search criteria.</td></tr>
+                  ) : (
+                    currentExams.map((item, index) => (
+                      <tr key={item._id || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td className="fw-bold text-muted small">{indexOfFirst + index + 1}</td>
+                        <td><div className="fw-bold text-dark">{item.title}</div><div className="small text-muted">{item.batch?.batchName || "Global Exam"}</div></td>
+                        <td className="text-muted">{formatDate(item.date)}</td>
+                        <td className="text-center"><span className="app-badge" style={{ ...getStatusStyle(item.status) }}>{item.status}</span></td>
+                        <td className="text-end fw-bold text-primary">{item.totalMarks}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="d-block d-md-none">
+              {loading ? (
+                <div className="text-center py-4">Loading exams...</div>
+              ) : currentExams.length === 0 ? (
+                <div className="text-center py-4 text-muted">No exams found.</div>
+              ) : (
+                <div className="row g-3">
+                  {currentExams.map((item, index) => (
+                    <div className="col-12" key={item._id || index}>
+                      <div className="app-mobile-card">
+                        <strong>#{indexOfFirst + index + 1} - {item.title}</strong>
+                        <div className="text-muted small mt-1">{item.batch?.batchName || "Global Exam"}</div>
+                        <div className="text-muted small"><small>{formatDate(item.date)}</small></div>
+                        <div className="d-flex justify-content-between align-items-center mt-2">
+                          <span className="app-badge" style={{ ...getStatusStyle(item.status) }}>{item.status}</span>
+                          <span className="fw-bold text-primary">{item.totalMarks} Marks</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {!loading && filteredExams.length > 0 && (
+              <div className="d-flex justify-content-between align-items-center mt-4 pt-3" style={{ borderTop: '1px solid #f1f5f9' }}>
+                <div className="text-muted small fw-medium">Showing <strong>{indexOfFirst + 1}</strong> to <strong>{Math.min(indexOfLast, filteredExams.length)}</strong> of {filteredExams.length} results</div>
+                <div className="d-flex gap-2">
+                  <button className="app-btn-soft" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>Previous</button>
+                  <button className="app-btn-primary" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>Next</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 };
 

@@ -92,4 +92,7 @@ const batchSchema = new mongoose.Schema(
   }
 );
 
+batchSchema.index({ course: 1, status: 1, createdAt: -1 });
+batchSchema.index({ isPublished: 1, status: 1, accessStatus: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Batch", batchSchema);

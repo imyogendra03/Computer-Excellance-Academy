@@ -31,13 +31,10 @@ const Password = () => {
 
         try {
             setLoading(true);
-            const adminData = JSON.parse(localStorage.getItem("adminData") || "{}");
-            const email = adminData.email || localStorage.getItem("email");
-
             await axios.put(`${import.meta.env.VITE_API_URL}/api/admin/change-password`, {
-                email,
                 oldPassword: form.oldPassword,
                 newPassword: form.newPassword,
+                confirmPassword: form.confirmPassword,
             });
 
             showToast("Password updated successfully");

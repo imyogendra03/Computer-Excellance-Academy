@@ -100,11 +100,14 @@ const Session = () => {
     try {
       setSaving(true);
 
+      const token = localStorage.getItem("adminToken");
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+
       if (isEditing) {
-        await axios.put(`${import.meta.env.VITE_API_URL}/api/session/${editingId}`, form);
+        await axios.put(`${import.meta.env.VITE_API_URL}/api/session/${editingId}`, form, config);
         showToast("Session updated successfully");
       } else {
-        await axios.post(`${import.meta.env.VITE_API_URL}/api/session`, form);
+        await axios.post(`${import.meta.env.VITE_API_URL}/api/session`, form, config);
         showToast("Session added successfully");
       }
 
@@ -122,7 +125,10 @@ const Session = () => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/session/${id}`);
+      const token = localStorage.getItem("adminToken");
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/session/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       showToast("Session deleted successfully");
       fetchSessions();
     } catch (error) {
@@ -155,14 +161,15 @@ const Session = () => {
   }, [sessions, search]);
 
   return (
-    <div className="app-page">
-      <div className="container">
-        <AppToast
+    <div className="app-page" >
+       <AppToast
           toast={toast}
           onClose={() => setToast({ show: false, message: "", type: "success" })}
         />
+      <div className="container" >
+       
 
-        <div className="app-hero mb-4">
+        <div className="app-hero mb-4" >
           <div className="row align-items-center g-4">
             <div className="col-lg-8">
               <h2 className="fw-bold mb-2">Session Dashboard</h2>

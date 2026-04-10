@@ -1,5 +1,7 @@
 import axios from "axios";
 import React, { useState } from "react";
+import AppToast from "../../components/ui/AppToast";
+import "../../components/ui/app-ui.css";
 import {
   FiCheckCircle,
   FiEye,
@@ -83,233 +85,73 @@ const Chanpass = () => {
 
   return (
     <>
-      <style>{`
-        .cp-page {
-          min-height: 100vh;
-          padding: 24px 0;
-          background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
-        }
-
-        .cp-hero {
-          padding: 32px;
-          border-radius: 28px;
-          color: #fff;
-          background: linear-gradient(135deg, #0f172a, #1d4ed8, #4f46e5);
-          box-shadow: 0 20px 45px rgba(37, 99, 235, 0.22);
-        }
-
-        .cp-card {
-          background: #fff;
-          border-radius: 24px;
-          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-          border: 0;
-          overflow: hidden;
-        }
-
-        .cp-card-header {
-          padding: 20px 24px;
-          color: #fff;
-          background: linear-gradient(135deg, #0f172a, #2563eb);
-        }
-
-        .cp-card-header h4 {
-          margin: 0 0 4px;
-          font-weight: 700;
-        }
-
-        .cp-card-header p {
-          margin: 0;
-          opacity: 0.8;
-        }
-
-        .cp-input-wrap {
-          position: relative;
-        }
-
-        .cp-input-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #64748b;
-        }
-
-        .cp-input {
-          width: 100%;
-          border: 1px solid #dbe3f0;
-          border-radius: 14px;
-          padding: 12px 44px 12px 40px;
-          outline: none;
-          transition: 0.2s ease;
-        }
-
-        .cp-input:focus {
-          border-color: #7c3aed;
-          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08);
-        }
-
-        .cp-eye-btn {
-          position: absolute;
-          right: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          border: none;
-          background: transparent;
-          color: #64748b;
-        }
-
-        .cp-btn-primary {
-          border: none;
-          color: #fff;
-          font-weight: 600;
-          border-radius: 14px;
-          padding: 12px 20px;
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
-        }
-
-        .cp-btn-soft {
-          border-radius: 14px;
-          padding: 12px 20px;
-          font-weight: 600;
-          background: #eef2ff;
-          color: #3730a3;
-          border: 1px solid #c7d2fe;
-        }
-
-        .cp-stat-card {
-          height: 100%;
-          padding: 24px;
-          background: #fff;
-          border-radius: 22px;
-          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-        }
-
-        .cp-toast {
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          z-index: 9999;
-          min-width: 280px;
-          color: #fff;
-          padding: 14px 16px;
-          border-radius: 16px;
-          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .cp-toast.success {
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
-        }
-
-        .cp-toast.error {
-          background: linear-gradient(135deg, #dc2626, #ef4444);
-        }
-
-        .cp-toast-close {
-          border: none;
-          background: transparent;
-          color: #fff;
-          font-size: 16px;
-        }
-
-        @media (max-width: 767px) {
-          .cp-hero {
-            padding: 24px;
-          }
-        }
-      `}</style>
-
-      <div className="cp-page">
+      <div className="app-page">
         <div className="container">
-          {toast.show && (
-            <div className={`cp-toast ${toast.type === "error" ? "error" : "success"}`}>
-              <span>{toast.message}</span>
-              <button
-                type="button"
-                className="cp-toast-close"
-                onClick={() => setToast({ show: false, message: "", type: "success" })}
-              >
-                <FiX />
-              </button>
-            </div>
-          )}
+          <AppToast toast={toast} onClose={() => setToast({ show: false, message: "", type: "success" })} />
 
-          <div className="cp-hero mb-4">
+          {/* Hero Section */}
+          <div className="app-hero mb-4">
             <div className="row align-items-center g-4">
               <div className="col-lg-8">
-                <h2 className="fw-bold mb-2">Change Password</h2>
-                <p className="mb-0" style={{ opacity: 0.88 }}>
-                  Keep your account secure by updating your password regularly.
-                </p>
+                <h2 className="fw-bold mb-2">Change <em style={{ fontStyle: "normal", color: "#60a5fa" }}>Password</em></h2>
+                <p className="mb-0">Keep your account secure by updating your password regularly.</p>
               </div>
-
               <div className="col-lg-4 text-lg-end">
-                <div
-                  style={{
-                    display: "inline-block",
-                    padding: "16px 20px",
-                    borderRadius: "18px",
-                    background: "rgba(255,255,255,0.14)",
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <div style={{ fontSize: "13px", opacity: 0.8 }}>Security</div>
-                  <div className="fw-bold" style={{ fontSize: "22px" }}>
-                    Protected
-                  </div>
+                <div style={{ display: "inline-block", padding: "12px 20px", borderRadius: "16px", background: "#f3f4f6", textAlign: "right" }}>
+                  <div className="small fw-bold text-muted">Security</div>
+                  <div className="fw-bold" style={{ fontSize: "20px" }}>Protected</div>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Stat Cards */}
           <div className="row g-4 mb-4">
             <div className="col-md-4">
-              <div className="cp-stat-card">
-                <div className="text-muted mb-2">Account Status</div>
+              <div className="app-stat-card">
+                <div className="app-label-muted">Account Status</div>
                 <h4 className="fw-bold mb-0">Active</h4>
               </div>
             </div>
-
             <div className="col-md-4">
-              <div className="cp-stat-card">
-                <div className="text-muted mb-2">Password Rules</div>
+              <div className="app-stat-card">
+                <div className="app-label-muted">Password Rules</div>
                 <h4 className="fw-bold mb-0">Min 6 Characters</h4>
               </div>
             </div>
-
             <div className="col-md-4">
-              <div className="cp-stat-card">
-                <div className="text-muted mb-2">Security Mode</div>
+              <div className="app-stat-card">
+                <div className="app-label-muted">Security Mode</div>
                 <h4 className="fw-bold mb-0">Enabled</h4>
               </div>
             </div>
           </div>
 
-          <div className="cp-card">
-            <div className="cp-card-header">
-              <h4>Update Password</h4>
-              <p>Enter your current password and choose a new secure password.</p>
+          {/* Password Change Panel */}
+          <div className="app-panel">
+            <div style={{ padding: "20px 24px", color: "#fff", background: "linear-gradient(135deg, #0f172a, #2563eb)", borderRadius: "24px 24px 0 0" }}>
+              <h5 className="fw-bold mb-1">Update Password</h5>
+              <p className="mb-0" style={{ opacity: 0.8 }}>Enter your current password and choose a new secure password.</p>
             </div>
 
-            <div className="p-4">
+            <div className="card-body p-4">
               <form onSubmit={handleSubmit}>
                 <div className="mb-3">
                   <label className="form-label fw-semibold">Old Password</label>
-                  <div className="cp-input-wrap">
-                    <FiLock className="cp-input-icon" />
+                  <div style={{ position: "relative" }}>
+                    <FiLock style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
                     <input
                       type={showOld ? "text" : "password"}
                       name="op"
                       value={data.op}
                       onChange={handleChange}
-                      className="cp-input"
+                      className="app-input"
                       placeholder="Enter old password"
+                      style={{ paddingLeft: "40px" }}
                     />
                     <button
                       type="button"
-                      className="cp-eye-btn"
+                      style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: "#64748b" }}
                       onClick={() => setShowOld((prev) => !prev)}
                     >
                       {showOld ? <FiEyeOff /> : <FiEye />}
@@ -319,19 +161,20 @@ const Chanpass = () => {
 
                 <div className="mb-3">
                   <label className="form-label fw-semibold">New Password</label>
-                  <div className="cp-input-wrap">
-                    <FiShield className="cp-input-icon" />
+                  <div style={{ position: "relative" }}>
+                    <FiShield style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
                     <input
                       type={showNew ? "text" : "password"}
                       name="np"
                       value={data.np}
                       onChange={handleChange}
-                      className="cp-input"
+                      className="app-input"
                       placeholder="Enter new password"
+                      style={{ paddingLeft: "40px" }}
                     />
                     <button
                       type="button"
-                      className="cp-eye-btn"
+                      style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: "#64748b" }}
                       onClick={() => setShowNew((prev) => !prev)}
                     >
                       {showNew ? <FiEyeOff /> : <FiEye />}
@@ -341,19 +184,20 @@ const Chanpass = () => {
 
                 <div className="mb-4">
                   <label className="form-label fw-semibold">Confirm New Password</label>
-                  <div className="cp-input-wrap">
-                    <FiCheckCircle className="cp-input-icon" />
+                  <div style={{ position: "relative" }}>
+                    <FiCheckCircle style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
                     <input
                       type={showConfirm ? "text" : "password"}
                       name="cnp"
                       value={data.cnp}
                       onChange={handleChange}
-                      className="cp-input"
+                      className="app-input"
                       placeholder="Confirm new password"
+                      style={{ paddingLeft: "40px" }}
                     />
                     <button
                       type="button"
-                      className="cp-eye-btn"
+                      style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: "#64748b" }}
                       onClick={() => setShowConfirm((prev) => !prev)}
                     >
                       {showConfirm ? <FiEyeOff /> : <FiEye />}
@@ -362,11 +206,10 @@ const Chanpass = () => {
                 </div>
 
                 <div className="d-flex flex-wrap gap-2">
-                  <button type="submit" className="cp-btn-primary" disabled={saving}>
+                  <button type="submit" className="app-btn-primary" disabled={saving}>
                     {saving ? "Updating..." : "Update Password"}
                   </button>
-
-                  <button type="button" className="cp-btn-soft" onClick={resetForm}>
+                  <button type="button" className="app-btn-soft" onClick={resetForm}>
                     Reset
                   </button>
                 </div>
