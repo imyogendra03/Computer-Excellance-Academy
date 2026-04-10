@@ -15,6 +15,7 @@ server/test_server.js
 server/check_db.js
 server/createAdmin.js
 server/verify_pw.js
+server/setupAdmin.js
 client/public/vite.svg
 client/README.md
 
