@@ -124,7 +124,13 @@ router.post("/login", async (req, res) => {
     // SECURITY FIX: Hash refresh token before storage
     admin.refreshToken = tokenUtils.hashRefreshToken(refreshToken);
     admin.lastLoginAt = new Date();
-    await admin.save();
+    
+    try {
+      await admin.save();
+    } catch (saveError) {
+      console.error("Error saving admin session:", saveError);
+      return res.status(500).json({ message: "Failed to establish session. Please try again." });
+    }
 
     return res.json({
       message: "Login Successfully",
@@ -144,17 +150,26 @@ router.post("/login", async (req, res) => {
 });
 
 router.get("/me", authMiddleware, adminMiddleware, async (req, res) => {
-  return res.status(200).json({
-    success: true,
-    admin: {
-      id: req.user._id,
-      email: req.user.email,
-      name: req.user.name || "Administrator",
-      role: req.user.role || "admin",
-      lastLoginAt: req.user.lastLoginAt || null,
-      createdAt: req.user.createdAt || null,
-    },
-  });
+  try {
+    return res.status(200).json({
+      success: true,
+      admin: {
+        id: req.user._id,
+        email: req.user.email,
+        name: req.user.name || "Administrator",
+        role: req.user.role || "admin",
+        lastLoginAt: req.user.lastLoginAt || null,
+        createdAt: req.user.createdAt || null,
+      },
+    });
+  } catch (error) {
+    console.error("Error in /me endpoint:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch admin profile",
+      error: error.message 
+    });
+  }
 });
 
 router.post("/refresh-token", async (req, res) => {
@@ -165,12 +180,23 @@ router.post("/refresh-token", async (req, res) => {
       return res.status(400).json({ success: false, message: "Refresh token required." });
     }
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const admin = await Admin.findById(decoded.id);
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (err) {
+      console.error("Refresh token verification failed:", err.message);
+      return res.status(403).json({ success: false, message: "Refresh token expired or invalid." });
+    }
 
-    // SECURITY FIX: Verify hash instead of comparing plaintext tokens
-    if (!admin || !tokenUtils.verifyRefreshToken(refreshToken, admin.refreshToken)) {
-      return res.status(403).json({ success: false, message: "Invalid session. Please login again." });
+    const admin = await Admin.findById(decoded.id);
+    if (!admin) {
+      return res.status(403).json({ success: false, message: "Admin not found." });
+    }
+
+    // Verify hashed refresh token
+    if (!tokenUtils.verifyRefreshToken(refreshToken, admin.refreshToken)) {
+      console.warn("Refresh token hash mismatch for admin:", decoded.id);
+      return res.status(403).json({ success: false, message: "Invalid refresh token." });
     }
 
     const tokens = generateTokens({
@@ -182,11 +208,21 @@ router.post("/refresh-token", async (req, res) => {
 
     // Hash new refresh token before storage
     admin.refreshToken = tokenUtils.hashRefreshToken(tokens.refreshToken);
-    await admin.save();
+    try {
+      await admin.save();
+    } catch (saveErr) {
+      console.error("Failed to save new refresh token:", saveErr);
+      // Still return the tokens even if save fails, so user doesn't get stuck
+    }
 
-    return res.status(200).json({ success: true, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
+    return res.status(200).json({ 
+      success: true, 
+      accessToken: tokens.accessToken, 
+      refreshToken: tokens.refreshToken 
+    });
   } catch (error) {
-    return res.status(403).json({ success: false, message: "Token expired or invalid." });
+    console.error("Refresh token error:", error.message);
+    return res.status(403).json({ success: false, message: "Token refresh failed." });
   }
 });
 

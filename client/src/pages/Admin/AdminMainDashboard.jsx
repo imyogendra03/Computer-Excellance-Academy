@@ -102,28 +102,57 @@ const AdminMainDashboard = () => {
       try {
         let tokenToUse = initialToken;
 
+        // Only refresh if token is actually expired
         if (isTokenExpired(tokenToUse)) {
-          tokenToUse = await refreshAdminAccessToken();
-        }
-
-        let response;
-        try {
-          response = await fetchAdminProfile(tokenToUse);
-        } catch (error) {
-          if (error?.response?.status === 401) {
+          try {
             tokenToUse = await refreshAdminAccessToken();
-            response = await fetchAdminProfile(tokenToUse);
-          } else {
-            throw error;
+          } catch (refreshErr) {
+            console.error("Token refresh failed:", refreshErr.message);
+            // If refresh fails, still try with current token
           }
         }
 
-        if (response?.data?.admin) {
-          localStorage.setItem("adminData", JSON.stringify(response.data.admin));
-          localStorage.setItem("email", response.data.admin.email || "");
-          localStorage.setItem("role", response.data.admin.role || "admin");
+        // Try to fetch profile
+        try {
+          const response = await fetchAdminProfile(tokenToUse);
+          if (response?.data?.admin) {
+            localStorage.setItem("adminData", JSON.stringify(response.data.admin));
+            localStorage.setItem("email", response.data.admin.email || "");
+            localStorage.setItem("role", response.data.admin.role || "admin");
+            setCheckingAccess(false);
+            return;
+          }
+        } catch (profileErr) {
+          console.error("Profile fetch error:", profileErr?.response?.status, profileErr.message);
+          
+          // Only try refresh once
+          if (profileErr?.response?.status === 401) {
+            try {
+              tokenToUse = await refreshAdminAccessToken();
+              const response = await fetchAdminProfile(tokenToUse);
+              if (response?.data?.admin) {
+                localStorage.setItem("adminData", JSON.stringify(response.data.admin));
+                localStorage.setItem("email", response.data.admin.email || "");
+                localStorage.setItem("role", response.data.admin.role || "admin");
+                setCheckingAccess(false);
+                return;
+              }
+            } catch (retryErr) {
+              console.error("Retry after refresh failed:", retryErr.message);
+              throw retryErr;
+            }
+          } else if (profileErr?.response?.status === 403) {
+            // Access denied - clear tokens and redirect
+            throw new Error("Access denied");
+          } else {
+            // Other errors - still allow them to proceed with cached data
+            console.warn("Profile fetch failed but allowing access with cached data");
+            setCheckingAccess(false);
+            return;
+          }
         }
-      } catch {
+      } catch (err) {
+        console.error("Access verification failed:", err.message);
         localStorage.removeItem("role");
         localStorage.removeItem("email");
         localStorage.removeItem("adminToken");
