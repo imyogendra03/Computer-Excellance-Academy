@@ -28,6 +28,21 @@ const Login = () => {
     return nextErrors;
   };
 
+  const getErrorMessage = (error) => {
+    if (error.response?.status === 404) {
+      return "User not found. Please check your email or register.";
+    } else if (error.response?.status === 401) {
+      return "Invalid credentials.";
+    } else if (error.code === "ECONNABORTED") {
+      return "Connection timeout. Server is taking too long to respond.";
+    } else if (error.message === "Network Error") {
+      return "Network error. Check your internet connection.";
+    } else if (!error.response) {
+      return `Network error. Cannot reach server at ${apiUrl}. Make sure the backend server is running.`;
+    }
+    return error?.response?.data?.message || "An error occurred. Please try again.";
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (step === 1) {
@@ -38,10 +53,11 @@ const Login = () => {
       }
       setLoading(true);
       try {
-        await axios.post(`${apiUrl}/api/auth/login`, data);
+        await axios.post(`${apiUrl}/api/auth/login`, data, { timeout: 15000 });
         setStep(2);
       } catch (error) {
-        setErrors({ email: error?.response?.data?.message || "Login failed" });
+        console.error("Login error:", error);
+        setErrors({ email: getErrorMessage(error) });
       } finally {
         setLoading(false);
       }
@@ -57,7 +73,7 @@ const Login = () => {
       const response = await axios.post(`${apiUrl}/api/auth/verify-login`, {
         email: data.email,
         otp: otp.trim(),
-      });
+      }, { timeout: 15000 });
       if (response?.data?.accessToken) {
         localStorage.setItem("token", response.data.accessToken);
         localStorage.setItem("refreshToken", response.data.refreshToken || "");
@@ -72,7 +88,8 @@ const Login = () => {
       }
       navigate("/UserDash");
     } catch (error) {
-      setErrors({ otp: error?.response?.data?.message || "OTP verification failed" });
+      console.error("OTP verification error:", error);
+      setErrors({ otp: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -83,10 +100,11 @@ const Login = () => {
     setOtp("");
     setLoading(true);
     try {
-      await axios.post(`${apiUrl}/api/auth/login`, data);
+      await axios.post(`${apiUrl}/api/auth/login`, data, { timeout: 15000 });
       setStep(2);
     } catch (error) {
-      setErrors({ otp: error?.response?.data?.message || "Failed to resend OTP." });
+      console.error("Resend OTP error:", error);
+      setErrors({ otp: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
